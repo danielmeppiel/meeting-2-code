@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting → Code | Contoso Industries Redesign</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- ─── Ambient background ─────────────────────────────────────────── -->
+    <div class="ambient-bg">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <!-- ─── App Shell ──────────────────────────────────────────────────── -->
+    <div id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="logo">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>
+                    </svg>
+                    <span class="logo-text">Meeting → Code</span>
+                </div>
+            </div>
+            <div class="header-center">
+                <div class="stepper" id="stepper">
+                    <div class="step active" data-step="1">
+                        <div class="step-indicator">
+                            <span class="step-number">1</span>
+                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        <span class="step-label">Analyze</span>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step" data-step="2">
+                        <div class="step-indicator">
+                            <span class="step-number">2</span>
+                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        <span class="step-label">Review Gaps</span>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step" data-step="3">
+                        <div class="step-indicator">
+                            <span class="step-number">3</span>
+                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        <span class="step-label">Create Issues</span>
+                    </div>
+                    <div class="step-connector"></div>
+                    <div class="step" data-step="4">
+                        <div class="step-indicator">
+                            <span class="step-number">4</span>
+                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        <span class="step-label">Deploy Agent</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="status-badge" id="statusBadge">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Ready</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- ─── Main Content ───────────────────────────────────────────── -->
+        <main class="main-content">
+
+            <!-- Step 1: Landing / Analyze -->
+            <section class="panel active" id="panel-analyze">
+                <div class="hero-section">
+                    <div class="hero-badge">Contoso Industries Redesign</div>
+                    <h1 class="hero-title">
+                        Transform Meeting Insights<br>
+                        <span class="gradient-text">Into Actionable Code</span>
+                    </h1>
+                    <p class="hero-subtitle">
+                        Automatically extract requirements from your latest meeting, 
+                        analyze gaps in the current codebase, and generate implementation tasks — all powered by AI agents.
+                    </p>
+                    <button class="btn btn-primary btn-xl" id="btnAnalyze" onclick="startAnalysis()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                        </svg>
+                        Analyze Latest Meeting
+                    </button>
+                    <div class="hero-features">
+                        <div class="feature-chip">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            WorkIQ Meeting Extraction
+                        </div>
+                        <div class="feature-chip">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
+                            Codebase Gap Analysis
+                        </div>
+                        <div class="feature-chip">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                            Complexity Estimation
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Live Analysis View → becomes the unified analysis + review panel -->
+            <section class="panel" id="panel-loading">
+                <div class="live-analysis">
+                    <!-- Left: Progress sidebar -->
+                    <div class="live-left">
+                        <div class="live-header">
+                            <div class="live-indicator">
+                                <span class="live-dot"></span>
+                                <span>Live Analysis</span>
+                            </div>
+                        </div>
+
+                        <!-- Progress Steps -->
+                        <div class="loading-steps" id="loadingSteps">
+                            <div class="loading-step" id="ls-fetch">
+                                <div class="loading-step-icon"></div>
+                                <span>Connecting to WorkIQ MCP</span>
+                            </div>
+                            <div class="loading-step" id="ls-extract">
+                                <div class="loading-step-icon"></div>
+                                <span>Fetching meeting data</span>
+                            </div>
+                            <div class="loading-step" id="ls-requirements">
+                                <div class="loading-step-icon"></div>
+                                <span>Extracting requirements</span>
+                            </div>
+                            <div class="loading-step" id="ls-analyze">
+                                <div class="loading-step-icon"></div>
+                                <span>Analyzing codebase gaps</span>
+                            </div>
+                            <div class="loading-step" id="ls-complexity">
+                                <div class="loading-step-icon"></div>
+                                <span>Estimating complexity</span>
+                            </div>
+                        </div>
+
+                        <!-- Agent Log -->
+                        <div class="agent-log" id="agentLog">
+                            <div class="agent-log-entries" id="agentLogEntries"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Unified table that evolves -->
+                    <div class="live-right" id="unifiedTableContainer" style="display:none;">
+                        <div class="panel-header" style="margin-bottom: var(--space-md);">
+                            <div>
+                                <h2 class="panel-title">Requirements & Gap Analysis</h2>
+                                <p class="panel-subtitle">
+                                    <span id="reqCount">0</span> requirements extracted &mdash;
+                                    <span id="gapAnalyzedCount">0</span> analyzed
+                                </p>
+                            </div>
+                            <div class="panel-actions" id="tableActions" style="display:none;">
+                                <button class="btn btn-ghost" onclick="toggleAllCheckboxes()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+                                    Toggle All
+                                </button>
+                                <button class="btn btn-primary" id="btnCreateIssues" onclick="createIssues()" disabled>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+                                    Create Issues for Selected
+                                    <span class="btn-badge" id="selectedCount">0</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="gap-table" id="unifiedTable">
+                                <thead>
+                                    <tr>
+                                        <th class="col-check" style="display:none;" id="colCheckHeader">
+                                            <label class="checkbox-wrapper">
+                                                <input type="checkbox" id="selectAll" onchange="handleSelectAll()">
+                                                <span class="checkmark"></span>
+                                            </label>
+                                        </th>
+                                        <th class="col-req">Requirement</th>
+                                        <th class="col-status">Status</th>
+                                        <th class="col-current">Current State</th>
+                                        <th class="col-gap">Gap</th>
+                                        <th class="col-complexity">Complexity</th>
+                                        <th class="col-effort">Est. Effort</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="unifiedTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Step 3: Issues Created -->
+            <section class="panel" id="panel-issues">
+                <!-- Progress header (visible during creation) -->
+                <div id="issueCreationProgress">
+                    <div class="creation-progress-header">
+                        <!-- Issue creation log -->
+                        <div class="agent-log agent-log-compact" id="issueLog" style="display:none;">
+                            <div class="agent-log-entries" id="issueLogEntries"></div>
+                        </div>
+                        <div class="creation-progress-text">
+                            <span class="live-indicator">
+                                <span class="live-dot"></span>
+                                <span>Creating Issues</span>
+                            </span>
+                            <span class="creation-progress-counter" id="issueProgressLabel">0 / 0</span>
+                        </div>
+                        <div class="creation-progress-bar">
+                            <div class="creation-progress-fill" id="issueProgressFill" style="width: 0%"></div>
+                        </div>
+                        <p class="creation-progress-detail" id="issueProgressDetail">Connecting to GitHub...</p>
+                    </div>
+                </div>
+
+                <!-- Issues table header + actions -->
+                <div class="panel-header" id="issueTableHeader" style="display:none;">
+                    <div>
+                        <h2 class="panel-title">Created Issues</h2>
+                        <p class="panel-subtitle"><span id="issueCount">0</span> issues created in danielmeppiel/corporate-website</p>
+                    </div>
+                    <div class="panel-actions">
+                        <button class="btn btn-ghost" onclick="toggleAllIssueCheckboxes()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+                            Toggle All
+                        </button>
+                        <button class="btn btn-primary" id="btnAssignAgent" onclick="assignAgent()" disabled>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>
+                                <circle cx="12" cy="15" r="2"/>
+                            </svg>
+                            Assign Copilot to Selected
+                            <span class="btn-badge" id="assignCount">0</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Assignment progress (shown during assignment) -->
+                <div id="assignProgress" style="display:none;">
+                    <div class="creation-progress-header">
+                        <div class="creation-progress-text">
+                            <span class="live-indicator">
+                                <span class="live-dot"></span>
+                                <span>Assigning Copilot Agent</span>
+                            </span>
+                            <span class="creation-progress-counter" id="assignProgressLabel">0 / 0</span>
+                        </div>
+                        <div class="creation-progress-bar">
+                            <div class="creation-progress-fill" id="assignProgressFill" style="width: 0%"></div>
+                        </div>
+                        <div class="agent-log agent-log-compact" id="assignLog">
+                            <div class="agent-log-entries" id="assignLogEntries"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issues table (rows appear one-by-one) -->
+                <div class="table-container" id="issueTableContainer" style="display:none;">
+                    <table class="gap-table" id="issueTable">
+                        <thead>
+                            <tr>
+                                <th class="col-check">
+                                    <label class="checkbox-wrapper">
+                                        <input type="checkbox" id="selectAllIssues" onchange="handleSelectAllIssues()">
+                                        <span class="checkmark"></span>
+                                    </label>
+                                </th>
+                                <th class="col-issue-num">Issue #</th>
+                                <th class="col-req">Title</th>
+                                <th class="col-issue-status">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issueTableBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Step 4: Completion -->
+            <section class="panel" id="panel-complete">
+                <div class="complete-section">
+                    <div class="complete-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                            <polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                    </div>
+                    <h2 class="complete-title">All Tasks Deployed!</h2>
+                    <p class="complete-subtitle">
+                        Copilot Coding Agent has been assigned to all created issues.<br>
+                        The agent will begin working on implementations automatically.
+                    </p>
+                    <div class="complete-stats" id="completeStats">
+                    </div>
+                    <div class="complete-actions">
+                        <a class="btn btn-primary btn-xl" id="btnViewRepo" href="#" target="_blank">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                            View Repository Issues
+                        </a>
+                        <button class="btn btn-ghost btn-xl" onclick="resetApp()">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                            Start New Analysis
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
