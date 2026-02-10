@@ -152,8 +152,29 @@
                         </div>
                     </div>
 
-                    <!-- Right: Unified table that evolves -->
-                    <div class="live-right" id="unifiedTableContainer" style="display:none;">
+                    <!-- Right: Meeting card + Unified table -->
+                    <div class="live-right" id="liveRightPanel">
+                        <!-- Meeting summary card (shown during Phase 1) -->
+                        <div class="meeting-card" id="meetingCard" style="display:none;">
+                            <div class="meeting-card-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                    <line x1="16" y1="2" x2="16" y2="6"/>
+                                    <line x1="8" y1="2" x2="8" y2="6"/>
+                                    <line x1="3" y1="10" x2="21" y2="10"/>
+                                </svg>
+                            </div>
+                            <h3 class="meeting-card-title" id="meetingCardTitle">Searching for meeting...</h3>
+                            <p class="meeting-card-date" id="meetingCardDate"></p>
+                            <div class="meeting-card-participants" id="meetingCardParticipants" style="display:none;"></div>
+                            <div class="meeting-card-status">
+                                <div class="meeting-card-pulse"></div>
+                                <span id="meetingCardStatus">Connecting to WorkIQ...</span>
+                            </div>
+                        </div>
+
+                        <!-- Unified table (evolves from requirements → gaps) -->
+                        <div id="unifiedTableContainer" style="display:none;">
                         <div class="panel-header" style="margin-bottom: var(--space-md);">
                             <div>
                                 <h2 class="panel-title">Requirements & Gap Analysis</h2>
@@ -197,6 +218,9 @@
                             </table>
                         </div>
                     </div>
+                    <!-- end unifiedTableContainer -->
+                    </div>
+                    <!-- end live-right -->
                 </div>
             </section>
 

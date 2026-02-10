@@ -115,6 +115,16 @@ async function startAnalysis() {
     document.getElementById('tableActions').style.display = 'none';
     document.getElementById('colCheckHeader').style.display = 'none';
 
+    // Show meeting card with initial state
+    const liveRight = document.getElementById('liveRightPanel');
+    if (liveRight) liveRight.style.display = '';
+    const meetingCard = document.getElementById('meetingCard');
+    meetingCard.style.display = 'flex';
+    document.getElementById('meetingCardTitle').textContent = 'Searching for meeting...';
+    document.getElementById('meetingCardDate').textContent = '';
+    document.getElementById('meetingCardParticipants').style.display = 'none';
+    document.getElementById('meetingCardStatus').textContent = 'Connecting to WorkIQ...';
+
     // Reset agent log
     document.getElementById('agentLogEntries').innerHTML = '';
 
@@ -148,11 +158,36 @@ async function startAnalysis() {
                 markStep(step);
             });
 
+            eventSource.addEventListener('meeting-info', (e) => {
+                const info = JSON.parse(e.data);
+                const card = document.getElementById('meetingCard');
+                card.style.display = 'flex';
+                document.getElementById('meetingCardTitle').textContent = info.title || 'Contoso Industries Redesign';
+                if (info.date) {
+                    document.getElementById('meetingCardDate').textContent = info.date;
+                }
+                if (info.participants && info.participants.length > 0) {
+                    const el = document.getElementById('meetingCardParticipants');
+                    el.style.display = 'flex';
+                    el.innerHTML = info.participants.map(p => `<span class="participant-chip">${escapeHtml(p)}</span>`).join('');
+                }
+                if (info.requirementCount) {
+                    document.getElementById('meetingCardStatus').textContent = `${info.requirementCount} requirements found — extracting...`;
+                }
+            });
+
             eventSource.addEventListener('requirements', (e) => {
                 const data = JSON.parse(e.data);
                 requirements = data.requirements;
                 console.log(`[Requirements] ${requirements.length} items`);
+                // Hide meeting card, show table
+                document.getElementById('meetingCard').style.display = 'none';
                 renderRequirementsAsRows(requirements);
+            });
+
+            eventSource.addEventListener('gap-started', (e) => {
+                const { id } = JSON.parse(e.data);
+                markRowAnalyzing(id);
             });
 
             eventSource.addEventListener('gap', (e) => {
@@ -256,6 +291,24 @@ function renderRequirementsAsRows(reqs) {
 
     const tableContainer = container.querySelector('.table-container');
     if (tableContainer) tableContainer.scrollTop = tableContainer.scrollHeight;
+}
+
+// ─── Mark a row as "Analyzing..." when its parallel session starts ────────────
+
+function markRowAnalyzing(gapId) {
+    const idx = gapId - 1;
+    const row = document.getElementById(`unified-row-${idx}`);
+    if (!row) return;
+
+    const statusCell = row.querySelector('.col-status');
+    if (statusCell) {
+        statusCell.innerHTML = `
+            <span class="status-chip analyzing active">
+                <span class="status-chip-dot"></span>
+                Analyzing
+            </span>
+        `;
+    }
 }
 
 // ─── Enrich a row when gap data arrives ──────────────────────────────────────

@@ -71,7 +71,9 @@ app.get("/api/analyze", async (req, res) => {
             workiqMcp: getWorkIQMcpConfig(),
             githubMcp: getGitHubMcpConfig(),
             onProgress: (step: number, message: string) => sendEvent("progress", { step, message }),
+            onMeetingInfo: (info) => sendEvent("meeting-info", info),
             onRequirements: (requirements: string[]) => sendEvent("requirements", { requirements }),
+            onGapStarted: (id: number) => sendEvent("gap-started", { id }),
             onGap: (gap) => sendEvent("gap", { gap }),
             onLog: (message: string) => sendEvent("log", { message }),
         });

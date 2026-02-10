@@ -1235,6 +1235,96 @@ body {
     font-style: italic;
 }
 
+/* ─── Meeting Card ─────────────────────────────────────────────────────────── */
+.meeting-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-lg);
+    padding: var(--space-2xl) var(--space-xl);
+    text-align: center;
+    min-height: 320px;
+    animation: fadeIn 0.4s var(--ease-out);
+}
+
+.meeting-card-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--radius-lg);
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+}
+
+.meeting-card-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.meeting-card-date {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.meeting-card-participants {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    justify-content: center;
+    max-width: 400px;
+}
+
+.participant-chip {
+    font-size: 0.72rem;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+}
+
+.meeting-card-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+}
+
+.meeting-card-pulse {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-emerald);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* ─── Analyzing active chip ────────────────────────────────────────────────── */
+.status-chip.analyzing.active .status-chip-dot {
+    background: var(--accent-primary);
+    animation: pulse 1s ease-in-out infinite;
+}
+
+/* ─── Live-right panel always visible during analysis ──────────────────────── */
+#liveRightPanel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 /* ─── Agent Log ────────────────────────────────────────────────────────────── */
 .agent-log {
     background: rgba(0, 0, 0, 0.35);
