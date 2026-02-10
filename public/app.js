@@ -122,11 +122,11 @@ async function startAnalysis() {
     meetingCard.style.display = 'flex';
     meetingCard.classList.remove('found');
     document.getElementById('meetingCardIcon').className = 'meeting-card-icon';
-    document.getElementById('meetingCardTitle').textContent = 'Searching for meeting...';
+    document.getElementById('meetingCardTitle').textContent = 'Connecting to WorkIQ...';
     document.getElementById('meetingCardDate').textContent = '';
     document.getElementById('meetingCardParticipants').style.display = 'none';
     document.getElementById('meetingCardStatusRow').style.display = 'flex';
-    document.getElementById('meetingCardStatus').textContent = 'Connecting to WorkIQ...';
+    document.getElementById('meetingCardStatus').textContent = 'Initializing session...';
 
     // Reset agent log
     document.getElementById('agentLogEntries').innerHTML = '';
@@ -159,6 +159,21 @@ async function startAnalysis() {
                 const { step, message } = JSON.parse(e.data);
                 console.log(`[Progress] Step ${step}: ${message}`);
                 markStep(step);
+
+                // Keep meeting card in sync with progress steps
+                const cardTitle = document.getElementById('meetingCardTitle');
+                const cardStatus = document.getElementById('meetingCardStatus');
+                if (step === 0) {
+                    // WorkIQ connected, now searching
+                    cardTitle.textContent = 'Searching for meeting...';
+                    cardStatus.textContent = 'Connected to WorkIQ';
+                } else if (step === 1) {
+                    // Meeting found, fetching data
+                    cardTitle.textContent = 'Meeting found';
+                    cardStatus.textContent = 'Fetching meeting data...';
+                } else if (step === 2) {
+                    cardStatus.textContent = 'Extracting requirements...';
+                }
             });
 
             eventSource.addEventListener('meeting-info', (e) => {
