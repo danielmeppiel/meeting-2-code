@@ -120,9 +120,12 @@ async function startAnalysis() {
     if (liveRight) liveRight.style.display = '';
     const meetingCard = document.getElementById('meetingCard');
     meetingCard.style.display = 'flex';
+    meetingCard.classList.remove('found');
+    document.getElementById('meetingCardIcon').className = 'meeting-card-icon';
     document.getElementById('meetingCardTitle').textContent = 'Searching for meeting...';
     document.getElementById('meetingCardDate').textContent = '';
     document.getElementById('meetingCardParticipants').style.display = 'none';
+    document.getElementById('meetingCardStatusRow').style.display = 'flex';
     document.getElementById('meetingCardStatus').textContent = 'Connecting to WorkIQ...';
 
     // Reset agent log
@@ -162,18 +165,28 @@ async function startAnalysis() {
                 const info = JSON.parse(e.data);
                 const card = document.getElementById('meetingCard');
                 card.style.display = 'flex';
-                document.getElementById('meetingCardTitle').textContent = info.title || 'Contoso Industries Redesign';
+                card.classList.add('found');
+                // Swap icon to a checkmark
+                const iconEl = document.getElementById('meetingCardIcon');
+                iconEl.className = 'meeting-card-icon found';
+                iconEl.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+                document.getElementById('meetingCardTitle').textContent = 'Meeting Found';
                 if (info.date) {
                     document.getElementById('meetingCardDate').textContent = info.date;
+                }
+                if (info.title) {
+                    // Show meeting title as a secondary line under the date
+                    const dateEl = document.getElementById('meetingCardDate');
+                    dateEl.textContent = (info.date ? info.date + '  ·  ' : '') + info.title;
                 }
                 if (info.participants && info.participants.length > 0) {
                     const el = document.getElementById('meetingCardParticipants');
                     el.style.display = 'flex';
                     el.innerHTML = info.participants.map(p => `<span class="participant-chip">${escapeHtml(p)}</span>`).join('');
                 }
-                if (info.requirementCount) {
-                    document.getElementById('meetingCardStatus').textContent = `${info.requirementCount} requirements found — extracting...`;
-                }
+                document.getElementById('meetingCardStatus').textContent = info.requirementCount
+                    ? `Extracting ${info.requirementCount} requirements...`
+                    : 'Extracting requirements...';
             });
 
             eventSource.addEventListener('requirements', (e) => {
@@ -255,7 +268,7 @@ function renderRequirementsAsRows(reqs) {
     const tbody = document.getElementById('unifiedTableBody');
     const count = document.getElementById('reqCount');
 
-    container.style.display = 'flex';
+    container.style.display = '';
     count.textContent = reqs.length;
     tbody.innerHTML = '';
 
@@ -281,10 +294,10 @@ function renderRequirementsAsRows(reqs) {
                     Queued
                 </span>
             </td>
-            <td class="col-current"><span class="cell-placeholder"></span></td>
-            <td class="col-gap"><span class="cell-placeholder"></span></td>
-            <td class="col-complexity"><span class="cell-placeholder"></span></td>
-            <td class="col-effort"><span class="cell-placeholder"></span></td>
+            <td class="col-current"><span class="cell-pending">—</span></td>
+            <td class="col-gap"><span class="cell-pending">—</span></td>
+            <td class="col-complexity"><span class="cell-pending">—</span></td>
+            <td class="col-effort"><span class="cell-pending">—</span></td>
         `;
         tbody.appendChild(tr);
     });

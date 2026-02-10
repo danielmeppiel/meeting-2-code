@@ -1325,6 +1325,28 @@ body {
     flex-direction: column;
 }
 
+#unifiedTableContainer {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+    animation: fadeSlideIn 0.4s var(--ease-out);
+}
+
+/* ─── Meeting card "found" state ───────────────────────────────────────────── */
+.meeting-card-icon.found {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: var(--accent-emerald);
+}
+
+/* ─── Cell pending dash (replaces shimmer bars) ────────────────────────────── */
+.cell-pending {
+    color: var(--text-tertiary);
+    opacity: 0.35;
+    font-size: 0.85rem;
+}
+
 /* ─── Agent Log ────────────────────────────────────────────────────────────── */
 .agent-log {
     background: rgba(0, 0, 0, 0.35);
