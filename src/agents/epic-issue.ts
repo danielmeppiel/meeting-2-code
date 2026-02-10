@@ -97,7 +97,8 @@ export async function createEpicIssue(
 
 /**
  * Link individual gap issues as sub-issues of the epic.
- * Uses `gh issue edit --add-sub-issue`.
+ * Uses the GitHub REST API: POST /repos/{owner}/{repo}/issues/{epic}/sub_issues
+ * The API requires the sub-issue's database ID (not issue number).
  */
 export async function linkSubIssuesToEpic(
     epicNumber: number,
@@ -114,20 +115,39 @@ export async function linkSubIssuesToEpic(
     for (const subNum of subIssueNumbers) {
         if (subNum <= 0) continue;
         try {
+            // First, get the issue's database ID (the API needs it, not the issue number)
+            const { stdout: idOut } = await execAsync(
+                `gh api repos/${OWNER}/${REPO}/issues/${subNum} --jq '.id'`,
+                { timeout: 10_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
+            );
+            const subIssueId = parseInt(idOut.trim(), 10);
+            if (!subIssueId || isNaN(subIssueId)) {
+                console.error(`[epic-issue] Could not get database ID for #${subNum}`);
+                continue;
+            }
+
+            // Link as sub-issue via REST API
             await execAsync(
-                `gh issue edit ${epicNumber} --add-sub-issue ${subNum} -R ${OWNER}/${REPO}`,
+                `gh api repos/${OWNER}/${REPO}/issues/${epicNumber}/sub_issues --method POST -F sub_issue_id=${subIssueId}`,
                 { timeout: 15_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
             );
             linked++;
+            console.log(`[epic-issue] Linked #${subNum} → epic #${epicNumber}`);
         } catch (err) {
-            // Sub-issue linking may not be available on all plans
-            console.error(`[epic-issue] Failed to link #${subNum}:`, err instanceof Error ? err.message : err);
+            const msg = err instanceof Error ? err.message : String(err);
+            // "duplicate sub-issues" means it's already linked — still a success
+            if (msg.includes("duplicate")) {
+                linked++;
+                console.log(`[epic-issue] #${subNum} already linked to epic #${epicNumber}`);
+            } else {
+                console.error(`[epic-issue] Failed to link #${subNum}:`, msg.substring(0, 200));
+            }
         }
     }
     if (linked > 0) {
         log(`✔ Linked ${linked}/${subIssueNumbers.length} sub-issues to epic #${epicNumber}`);
     } else {
-        log(`⚠ Could not link sub-issues (feature may not be available)`);
+        log(`⚠ Could not link sub-issues (feature may require GitHub plan upgrade)`);
     }
 }
 
