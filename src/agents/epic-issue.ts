@@ -56,6 +56,16 @@ export async function createEpicIssue(
 
     const body = bodyParts.join("\n");
 
+    // Ensure "epic" label exists (create it if not — ignore errors)
+    try {
+        await execAsync(
+            `gh label create epic --description "Epic tracking issue" --color 6f42c1 -R ${OWNER}/${REPO}`,
+            { timeout: 10_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
+        );
+    } catch {
+        // Label may already exist — that's fine
+    }
+
     try {
         const { stdout, stderr } = await execAsync(
             `gh issue create --title ${shellEscape(title)} --body ${shellEscape(body)} --label epic -R ${OWNER}/${REPO}`,
