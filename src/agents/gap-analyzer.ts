@@ -1,7 +1,7 @@
 import type { CopilotClient, MCPLocalServerConfig, MCPRemoteServerConfig } from "@github/copilot-sdk";
 import { createAgentSession } from "./session-helpers.js";
 
-interface GapItem {
+export interface GapItem {
     id: number;
     requirement: string;
     currentState: string;
@@ -11,44 +11,43 @@ interface GapItem {
     details: string;
 }
 
-interface MeetingInfo {
+export interface MeetingInfo {
     title: string;
     date?: string;
     participants?: string[];
+    summary?: string;
     requirementCount?: number;
 }
 
-interface AnalyzeMeetingOptions {
+export interface MeetingResult {
+    info: MeetingInfo;
+    requirements: string[];
+}
+
+// ── Phase 1: Extract meeting requirements via WorkIQ ───────────────────────
+
+interface ExtractOptions {
     workiqMcp: Record<string, MCPLocalServerConfig | MCPRemoteServerConfig>;
-    githubMcp: Record<string, MCPLocalServerConfig | MCPRemoteServerConfig>;
     onProgress?: (step: number, message: string) => void;
     onMeetingInfo?: (info: MeetingInfo) => void;
-    onRequirements?: (requirements: string[]) => void;
-    onGapStarted?: (id: number) => void;
-    onGap?: (gap: GapItem) => void;
     onLog?: (message: string) => void;
 }
 
-const MAX_CONCURRENT = 4;
-
-export async function analyzeMeetingGaps(
+export async function extractMeetingRequirements(
     client: CopilotClient,
-    options: AnalyzeMeetingOptions,
-): Promise<GapItem[]> {
+    options: ExtractOptions,
+): Promise<MeetingResult> {
     const progress = options.onProgress ?? (() => {});
     const onMeetingInfo = options.onMeetingInfo ?? (() => {});
-    const onRequirements = options.onRequirements ?? (() => {});
-    const onGapStarted = options.onGapStarted ?? (() => {});
-    const onGap = options.onGap ?? (() => {});
     const log = options.onLog ?? (() => {});
 
-    // ── Phase 1: Fetch the latest meeting using WorkIQ MCP ─────────────────
     progress(0, "Connecting to WorkIQ MCP Server...");
     log("Initializing WorkIQ MCP session (npx @microsoft/workiq mcp)...");
     console.log("[gap-analyzer] Creating WorkIQ MCP session...");
 
-    let meetingContent = "";
     let requirements: string[] = [];
+    let info: MeetingInfo = { title: "Contoso Industries Redesign" };
+
     try {
         const meetingSession = await createAgentSession(client, {
             model: "gpt-5.2-codex",
@@ -67,6 +66,7 @@ After retrieving the meeting notes/transcript, return a JSON object with this ex
   "title": "the meeting title",
   "date": "meeting date/time if available",
   "participants": ["list", "of", "attendees"],
+  "summary": "A brief 2-3 sentence summary of the key decisions and topics discussed",
   "requirements": ["requirement 1", "requirement 2", ...]
 }
 Only output the JSON object, nothing else.`,
@@ -88,58 +88,53 @@ Return a JSON object with:
 - title: the meeting subject/title
 - date: when the meeting occurred
 - participants: array of attendee names
+- summary: a brief 2-3 sentence summary of the key discussions and decisions
 - requirements: array of requirement strings
 
 IMPORTANT: Do NOT use glob, view, grep, or any file-browsing tools. Only use WorkIQ/meeting tools.`,
         }, 300_000);
-        meetingContent = meetingResult?.data?.content || "{}";
+        const meetingContent = meetingResult?.data?.content || "{}";
         console.log("[gap-analyzer] WorkIQ response:", meetingContent.substring(0, 500));
         log(`Agent response received (${meetingContent.length} chars)`);
         await meetingSession.destroy();
 
         // Parse meeting info + requirements
         try {
-            // Try to parse the structured JSON object
             const jsonObjMatch = meetingContent.match(/\{[\s\S]*\}/);
             if (jsonObjMatch) {
                 const parsed = JSON.parse(jsonObjMatch[0]);
                 if (parsed.requirements && Array.isArray(parsed.requirements)) {
                     requirements = parsed.requirements;
-                    // Emit meeting info immediately
-                    onMeetingInfo({
+                    info = {
                         title: parsed.title || "Contoso Industries Redesign",
                         date: parsed.date,
                         participants: parsed.participants,
+                        summary: parsed.summary,
                         requirementCount: requirements.length,
-                    });
-                    log(`Meeting: "${parsed.title || "Contoso Industries Redesign"}"`);
+                    };
+                    onMeetingInfo(info);
+                    log(`Meeting: "${info.title}"`);
                     if (parsed.participants?.length) {
                         log(`Participants: ${parsed.participants.join(", ")}`);
                     }
                 }
             }
-            // Fallback: try to extract a JSON array
             if (requirements.length === 0) {
                 const jsonArrMatch = meetingContent.match(/\[[\s\S]*\]/);
                 requirements = JSON.parse(jsonArrMatch?.[0] || "[]");
                 if (!Array.isArray(requirements)) requirements = [];
-                onMeetingInfo({
-                    title: "Contoso Industries Redesign",
-                    requirementCount: requirements.length,
-                });
+                info.requirementCount = requirements.length;
+                onMeetingInfo(info);
             }
             log(`Parsed ${requirements.length} requirements`);
         } catch {
-            // If not valid JSON, split by newlines as fallback
             log("Response wasn't valid JSON, parsing as text lines...");
             requirements = meetingContent
                 .split("\n")
                 .map((l: string) => l.replace(/^[\d\-.*]+\s*/, "").trim())
                 .filter((l: string) => l.length > 10);
-            onMeetingInfo({
-                title: "Contoso Industries Redesign",
-                requirementCount: requirements.length,
-            });
+            info.requirementCount = requirements.length;
+            onMeetingInfo(info);
             log(`Extracted ${requirements.length} lines from text`);
         }
     } catch (err) {
@@ -152,34 +147,55 @@ IMPORTANT: Do NOT use glob, view, grep, or any file-browsing tools. Only use Wor
     }
 
     if (requirements.length === 0) {
-        log(`❌ No requirements extracted. Raw response was: ${meetingContent.substring(0, 200)}`);
         throw new Error(
-            `No requirements found in the meeting. The agent returned: "${meetingContent.substring(0, 100)}"\n` +
-            `Make sure a meeting titled 'Contoso Industries Redesign' exists in your M365 calendar with notes or transcript.`
+            `No requirements found in the meeting. Make sure a meeting titled 'Contoso Industries Redesign' exists in your M365 calendar.`
         );
     }
 
-    // ── Stream requirements to frontend ────────────────────────────────────
     progress(2, `Extracted ${requirements.length} requirements from meeting`);
     log(`✔ ${requirements.length} requirements extracted successfully`);
-    onRequirements(requirements);
     console.log(`[gap-analyzer] ${requirements.length} requirements extracted.`);
 
-    // ── Phase 2: Parallel gap analysis — one session per requirement ───────
-    progress(3, "Analyzing danielmeppiel/corporate-website...");
-    log(`Starting parallel gap analysis (${MAX_CONCURRENT} concurrent sessions)...`);
-    console.log(`[gap-analyzer] Starting parallel analysis of ${requirements.length} requirements (concurrency: ${MAX_CONCURRENT})...`);
+    return { info, requirements };
+}
 
-    const gapItems: GapItem[] = new Array(requirements.length);
+// ── Phase 2: Parallel gap analysis for selected requirements ───────────────
+
+interface AnalyzeGapsOptions {
+    requirements: Array<{ index: number; text: string }>;
+    githubMcp: Record<string, MCPLocalServerConfig | MCPRemoteServerConfig>;
+    onProgress?: (step: number, message: string) => void;
+    onGapStarted?: (id: number) => void;
+    onGap?: (gap: GapItem) => void;
+    onLog?: (message: string) => void;
+}
+
+const MAX_CONCURRENT = 4;
+
+export async function analyzeSelectedGaps(
+    client: CopilotClient,
+    options: AnalyzeGapsOptions,
+): Promise<GapItem[]> {
+    const { requirements } = options;
+    const progress = options.onProgress ?? (() => {});
+    const onGapStarted = options.onGapStarted ?? (() => {});
+    const onGap = options.onGap ?? (() => {});
+    const log = options.onLog ?? (() => {});
+
+    const concurrent = Math.min(MAX_CONCURRENT, requirements.length);
+    progress(4, "Analyzing danielmeppiel/corporate-website...");
+    log(`Starting parallel gap analysis (${concurrent} concurrent sessions)...`);
+    console.log(`[gap-analyzer] Starting parallel analysis of ${requirements.length} requirements (concurrency: ${concurrent})...`);
+
+    const gapItems: GapItem[] = [];
     let completedCount = 0;
 
-    async function analyzeOneRequirement(index: number): Promise<void> {
-        const req = requirements[index]!;
-        const id = index + 1;
-        const label = req.length > 50 ? req.substring(0, 50) + "..." : req;
+    async function analyzeOne(req: { index: number; text: string }): Promise<void> {
+        const id = req.index + 1; // 1-based ID matching original requirement index
+        const label = req.text.length > 50 ? req.text.substring(0, 50) + "..." : req.text;
 
         onGapStarted(id);
-        log(`🔍 [${id}/${requirements.length}] Analyzing: ${label}`);
+        log(`🔍 [${completedCount + 1}/${requirements.length}] Analyzing: ${label}`);
         console.log(`[gap-analyzer] Starting analysis #${id}: ${label}`);
 
         try {
@@ -212,7 +228,7 @@ Return ONLY a valid JSON object (no markdown, no commentary):
             const result = await session.sendAndWait({
                 prompt: `Analyze this ONE requirement against the repository "danielmeppiel/corporate-website":
 
-"${req}"
+"${req.text}"
 
 Use GitHub MCP tools to browse and read the actual source files. Be specific about what files exist and what's missing.
 Return ONLY a valid JSON object.`,
@@ -221,50 +237,51 @@ Return ONLY a valid JSON object.`,
             const content = result?.data?.content || "{}";
             await session.destroy();
 
-            // Parse the single gap result
             const jsonMatch = content.match(/\{[\s\S]*\}/);
             const parsed = JSON.parse(jsonMatch?.[0] || "{}");
 
-            gapItems[index] = {
+            const gap: GapItem = {
                 id,
-                requirement: parsed.requirement || req,
+                requirement: parsed.requirement || req.text,
                 currentState: parsed.currentState || "Not assessed",
                 gap: parsed.gap || "Unknown",
                 complexity: parsed.complexity || "Medium",
                 estimatedEffort: parsed.estimatedEffort || "TBD",
                 details: parsed.details || "No details available",
             };
+            gapItems.push(gap);
+            onGap(gap);
         } catch (err) {
             console.error(`[gap-analyzer] Error analyzing requirement #${id}:`, err);
-            gapItems[index] = {
+            const gap: GapItem = {
                 id,
-                requirement: req,
+                requirement: req.text,
                 currentState: "Analysis failed",
                 gap: `Error: ${err instanceof Error ? err.message : String(err)}`.substring(0, 200),
                 complexity: "Medium",
                 estimatedEffort: "TBD",
                 details: "Retry recommended",
             };
+            gapItems.push(gap);
+            onGap(gap);
         }
 
         completedCount++;
-        onGap(gapItems[index]!);
         log(`✔ [${completedCount}/${requirements.length}] Done: ${label}`);
         console.log(`[gap-analyzer] Completed #${id} (${completedCount}/${requirements.length})`);
     }
 
-    // Run with bounded concurrency
-    const queue = requirements.map((_, i) => i);
-    const workers = Array.from({ length: Math.min(MAX_CONCURRENT, requirements.length) }, async () => {
+    // Bounded concurrency worker pool
+    const queue = [...requirements];
+    const workers = Array.from({ length: concurrent }, async () => {
         while (queue.length > 0) {
-            const index = queue.shift()!;
-            await analyzeOneRequirement(index);
+            const req = queue.shift()!;
+            await analyzeOne(req);
         }
     });
     await Promise.all(workers);
 
-    progress(4, "Analysis complete");
-    log(`✔ Analysis complete: ${gapItems.length} gaps identified`);
-    console.log(`[gap-analyzer] ${gapItems.length} gaps identified.`);
+    log(`✔ Analysis complete: ${gapItems.length} gaps analyzed`);
+    console.log(`[gap-analyzer] ${gapItems.length} gaps analyzed.`);
     return gapItems;
 }

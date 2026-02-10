@@ -138,11 +138,11 @@
                             </div>
                             <div class="loading-step" id="ls-analyze">
                                 <div class="loading-step-icon"></div>
-                                <span>Analyzing codebase gaps</span>
+                                <span>Creating epic issue</span>
                             </div>
                             <div class="loading-step" id="ls-complexity">
                                 <div class="loading-step-icon"></div>
-                                <span>Estimating complexity</span>
+                                <span>Analyzing selected gaps</span>
                             </div>
                         </div>
 
@@ -181,6 +181,10 @@
                                 <p class="panel-subtitle">
                                     <span id="reqCount">0</span> requirements extracted &mdash;
                                     <span id="gapAnalyzedCount">0</span> analyzed
+                                    <a id="epicLink" href="#" target="_blank" class="epic-link" style="display:none;">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                        Epic #<span id="epicNumber"></span>
+                                    </a>
                                 </p>
                             </div>
                             <div class="panel-actions" id="tableActions" style="display:none;">
@@ -188,7 +192,12 @@
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
                                     Toggle All
                                 </button>
-                                <button class="btn btn-primary" id="btnCreateIssues" onclick="createIssues()" disabled>
+                                <button class="btn btn-primary" id="btnAnalyzeGaps" onclick="startGapAnalysis()">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                    Analyze Gaps for Selected
+                                    <span class="btn-badge" id="analyzeCount">0</span>
+                                </button>
+                                <button class="btn btn-primary" id="btnCreateIssues" onclick="createIssues()" style="display:none;" disabled>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
                                     Create Issues for Selected
                                     <span class="btn-badge" id="selectedCount">0</span>

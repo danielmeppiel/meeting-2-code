@@ -773,6 +773,27 @@ body {
     margin-top: var(--space-xs);
 }
 
+.epic-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: var(--space-sm);
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    transition: all 0.2s var(--ease-out);
+}
+.epic-link:hover {
+    background: rgba(88, 166, 255, 0.15);
+    border-color: var(--accent);
+}
+.epic-link svg { opacity: 0.7; }
+
 .panel-actions {
     display: flex;
     gap: var(--space-md);
@@ -1192,6 +1213,12 @@ body {
     background: rgba(6, 182, 212, 0.12);
     color: rgb(6, 182, 212);
     border-color: rgba(6, 182, 212, 0.25);
+}
+
+.status-chip.pending {
+    background: rgba(148, 163, 184, 0.1);
+    color: var(--text-secondary);
+    border-color: rgba(148, 163, 184, 0.2);
 }
 
 .status-chip.assigned {

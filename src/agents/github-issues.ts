@@ -26,6 +26,7 @@ interface CreatedIssue {
 
 interface CreateIssuesOptions {
     gaps: GapItem[];
+    epicIssueNumber?: number;
     onProgress?: (current: number, total: number, message: string) => void;
     onIssueCreated?: (issue: CreatedIssue) => void;
     onLog?: (message: string) => void;
@@ -53,7 +54,7 @@ export async function createGithubIssues(
         console.log(`[github-issues] Creating issue ${i + 1}/${total}...`);
 
         const title = `[Contoso Redesign] ${gap.requirement}`;
-        const body = [
+        const bodyParts = [
             "## Description",
             gap.gap,
             "",
@@ -68,7 +69,13 @@ export async function createGithubIssues(
             "",
             "## Estimated Effort",
             `${gap.estimatedEffort} | Complexity: ${gap.complexity}`,
-        ].join("\n");
+        ];
+
+        if (options.epicIssueNumber && options.epicIssueNumber > 0) {
+            bodyParts.push("", `Part of #${options.epicIssueNumber}`);
+        }
+
+        const body = bodyParts.join("\n");
 
         try {
             // Use gh issue create with --json to get structured output

@@ -8,6 +8,9 @@ let requirements = [];
 let createdIssues = [];
 let currentStep = 1;
 let analysisComplete = false;
+let analysisPhase = 'idle'; // 'idle' | 'extracting' | 'selecting' | 'analyzing' | 'reviewed'
+let epicIssueNumber = 0;
+let epicIssueUrl = '';
 
 // ─── Panel Management ─────────────────────────────────────────────────────────
 function showPanel(panelId) {
@@ -91,16 +94,41 @@ function isNoGap(gap) {
 }
 
 // ─── Step 1: Analyze Meeting ──────────────────────────────────────────────────
+const stepIds = ['ls-fetch', 'ls-extract', 'ls-requirements', 'ls-analyze', 'ls-complexity'];
+
+function markStep(stepNum) {
+    stepIds.forEach((id, i) => {
+        const el = document.getElementById(id);
+        el.classList.remove('active');
+        el.querySelector('.loading-step-icon').classList.remove('spinner');
+        if (i < stepNum) {
+            el.classList.add('done');
+        } else if (i === stepNum) {
+            el.classList.add('active');
+            el.querySelector('.loading-step-icon').classList.add('spinner');
+        }
+    });
+}
+
+function markAllStepsDone() {
+    stepIds.forEach(id => {
+        const el = document.getElementById(id);
+        el.classList.remove('active');
+        el.classList.add('done');
+        el.querySelector('.loading-step-icon').classList.remove('spinner');
+    });
+}
+
 async function startAnalysis() {
     const btn = document.getElementById('btnAnalyze');
     btn.disabled = true;
     analysisComplete = false;
+    analysisPhase = 'extracting';
 
     setStatus('Analyzing...', 'processing');
     showPanel('panel-loading');
 
     // Reset progress steps
-    const stepIds = ['ls-fetch', 'ls-extract', 'ls-requirements', 'ls-analyze', 'ls-complexity'];
     stepIds.forEach(s => {
         const el = document.getElementById(s);
         el.classList.remove('active', 'done');
@@ -114,6 +142,13 @@ async function startAnalysis() {
     document.getElementById('gapAnalyzedCount').textContent = '0';
     document.getElementById('tableActions').style.display = 'none';
     document.getElementById('colCheckHeader').style.display = 'none';
+    document.getElementById('btnAnalyzeGaps').style.display = '';
+    document.getElementById('btnCreateIssues').style.display = 'none';
+
+    // Reset epic link
+    document.getElementById('epicLink').style.display = 'none';
+    epicIssueNumber = 0;
+    epicIssueUrl = '';
 
     // Show meeting card with initial state
     const liveRight = document.getElementById('liveRightPanel');
@@ -134,26 +169,11 @@ async function startAnalysis() {
     requirements = [];
     gaps = [];
 
-    function markStep(stepNum) {
-        stepIds.forEach((id, i) => {
-            const el = document.getElementById(id);
-            el.classList.remove('active');
-            el.querySelector('.loading-step-icon').classList.remove('spinner');
-            if (i < stepNum) {
-                el.classList.add('done');
-            } else if (i === stepNum) {
-                el.classList.add('active');
-                el.querySelector('.loading-step-icon').classList.add('spinner');
-            }
-        });
-    }
-
     markStep(0);
 
     try {
         const result = await new Promise((resolve, reject) => {
             const eventSource = new EventSource('/api/analyze');
-            let gapAnalyzedCount = 0;
 
             eventSource.addEventListener('progress', (e) => {
                 const { step, message } = JSON.parse(e.data);
@@ -164,15 +184,15 @@ async function startAnalysis() {
                 const cardTitle = document.getElementById('meetingCardTitle');
                 const cardStatus = document.getElementById('meetingCardStatus');
                 if (step === 0) {
-                    // WorkIQ connected, now searching
                     cardTitle.textContent = 'Searching for meeting...';
                     cardStatus.textContent = 'Connected to WorkIQ';
                 } else if (step === 1) {
-                    // Meeting found, fetching data
                     cardTitle.textContent = 'Meeting found';
                     cardStatus.textContent = 'Fetching meeting data...';
                 } else if (step === 2) {
                     cardStatus.textContent = 'Extracting requirements...';
+                } else if (step === 3) {
+                    cardStatus.textContent = 'Creating epic issue...';
                 }
             });
 
@@ -181,7 +201,6 @@ async function startAnalysis() {
                 const card = document.getElementById('meetingCard');
                 card.style.display = 'flex';
                 card.classList.add('found');
-                // Swap icon to a checkmark
                 const iconEl = document.getElementById('meetingCardIcon');
                 iconEl.className = 'meeting-card-icon found';
                 iconEl.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -190,7 +209,6 @@ async function startAnalysis() {
                     document.getElementById('meetingCardDate').textContent = info.date;
                 }
                 if (info.title) {
-                    // Show meeting title as a secondary line under the date
                     const dateEl = document.getElementById('meetingCardDate');
                     dateEl.textContent = (info.date ? info.date + '  ·  ' : '') + info.title;
                 }
@@ -208,24 +226,21 @@ async function startAnalysis() {
                 const data = JSON.parse(e.data);
                 requirements = data.requirements;
                 console.log(`[Requirements] ${requirements.length} items`);
-                // Hide meeting card, show table
+                // Hide meeting card, show table with checkboxes
                 document.getElementById('meetingCard').style.display = 'none';
-                renderRequirementsAsRows(requirements);
+                renderRequirementsForSelection(requirements);
             });
 
-            eventSource.addEventListener('gap-started', (e) => {
-                const { id } = JSON.parse(e.data);
-                markRowAnalyzing(id);
-            });
-
-            eventSource.addEventListener('gap', (e) => {
-                const { gap } = JSON.parse(e.data);
-                console.log(`[Gap] #${gap.id}: ${gap.requirement.substring(0, 60)}`);
-                gap.hasGap = !isNoGap(gap);
-                gaps.push(gap);
-                gapAnalyzedCount++;
-                enrichRowWithGap(gap);
-                document.getElementById('gapAnalyzedCount').textContent = gapAnalyzedCount;
+            eventSource.addEventListener('epic-created', (e) => {
+                const { number, url } = JSON.parse(e.data);
+                epicIssueNumber = number;
+                epicIssueUrl = url;
+                if (number > 0) {
+                    const link = document.getElementById('epicLink');
+                    link.href = url;
+                    link.style.display = 'inline-flex';
+                    document.getElementById('epicNumber').textContent = number;
+                }
             });
 
             eventSource.addEventListener('log', (e) => {
@@ -236,13 +251,14 @@ async function startAnalysis() {
             eventSource.addEventListener('complete', (e) => {
                 eventSource.close();
                 const data = JSON.parse(e.data);
-                stepIds.forEach(id => {
-                    const el = document.getElementById(id);
+                // Mark steps 0-3 done (extraction + epic), leave step 4 for user-triggered gap analysis
+                [0, 1, 2, 3].forEach(i => {
+                    const el = document.getElementById(stepIds[i]);
                     el.classList.remove('active');
                     el.classList.add('done');
                     el.querySelector('.loading-step-icon').classList.remove('spinner');
                 });
-                resolve({ success: data.success, totalGaps: data.totalGaps });
+                resolve(data);
             });
 
             eventSource.addEventListener('error', (e) => {
@@ -257,28 +273,25 @@ async function startAnalysis() {
             });
         });
 
-        if (!result.success) throw new Error('Analysis failed');
+        if (!result.success) throw new Error('Extraction failed');
 
-        analysisComplete = true;
-        const actionableGaps = gaps.filter(g => g.hasGap).length;
-        const noGapCount = gaps.length - actionableGaps;
+        // Extraction done — enter selection phase
+        analysisPhase = 'selecting';
+        setStatus(`${requirements.length} Requirements`, '');
         setStep(2);
-        setStatus(`${actionableGaps} Gaps / ${noGapCount} Met`, '');
-
-        // Reveal checkboxes + actions
-        revealCheckboxes();
 
     } catch (error) {
         showToast(error.message);
         setStatus('Error', 'error');
         showPanel('panel-analyze');
         btn.disabled = false;
+        analysisPhase = 'idle';
     }
 }
 
-// ─── Unified table: render requirements as initial rows ──────────────────────
+// ─── Render requirements for user selection (before gap analysis) ─────────────
 
-function renderRequirementsAsRows(reqs) {
+function renderRequirementsForSelection(reqs) {
     const container = document.getElementById('unifiedTableContainer');
     const tbody = document.getElementById('unifiedTableBody');
     const count = document.getElementById('reqCount');
@@ -292,11 +305,11 @@ function renderRequirementsAsRows(reqs) {
         tr.id = `unified-row-${i}`;
         tr.dataset.index = i;
         tr.style.animationDelay = `${i * 0.04}s`;
-        tr.classList.add('unified-row');
+        tr.classList.add('unified-row', 'selected');
         tr.innerHTML = `
-            <td class="col-check" style="display:none;">
+            <td class="col-check">
                 <label class="checkbox-wrapper">
-                    <input type="checkbox" data-gap-index="${i}" onchange="handleCheckboxChange(${i})">
+                    <input type="checkbox" data-gap-index="${i}" checked onchange="handleCheckboxChange(${i})">
                     <span class="checkmark"></span>
                 </label>
             </td>
@@ -304,10 +317,7 @@ function renderRequirementsAsRows(reqs) {
                 <div class="td-requirement">${escapeHtml(req)}</div>
             </td>
             <td class="col-status">
-                <span class="status-chip analyzing">
-                    <span class="status-chip-dot"></span>
-                    Queued
-                </span>
+                <span class="status-chip pending">Pending</span>
             </td>
             <td class="col-current"><span class="cell-pending">—</span></td>
             <td class="col-gap"><span class="cell-pending">—</span></td>
@@ -317,8 +327,146 @@ function renderRequirementsAsRows(reqs) {
         tbody.appendChild(tr);
     });
 
-    const tableContainer = container.querySelector('.table-container');
-    if (tableContainer) tableContainer.scrollTop = tableContainer.scrollHeight;
+    // Show checkboxes + analyze button immediately
+    document.getElementById('colCheckHeader').style.display = '';
+    document.getElementById('tableActions').style.display = 'flex';
+    document.getElementById('tableActions').style.animation = 'fadeSlideIn 0.4s var(--ease-out)';
+    document.getElementById('selectAll').checked = true;
+    updateAnalyzeCount();
+}
+
+function updateAnalyzeCount() {
+    let count = 0;
+    document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) count++;
+    });
+    document.getElementById('analyzeCount').textContent = count;
+    document.getElementById('btnAnalyzeGaps').disabled = count === 0;
+}
+
+// ─── Step 1b: Gap Analysis for Selected Requirements ──────────────────────────
+
+async function startGapAnalysis() {
+    // Gather selected requirement indices
+    const selectedIndices = [];
+    document.querySelectorAll('.unified-row').forEach((row, i) => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb && cb.checked) selectedIndices.push(i);
+    });
+
+    if (selectedIndices.length === 0) {
+        showToast('Please select at least one requirement to analyze.');
+        return;
+    }
+
+    analysisPhase = 'analyzing';
+    const btn = document.getElementById('btnAnalyzeGaps');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Analyzing ${selectedIndices.length}...`;
+    setStatus('Analyzing Gaps...', 'processing');
+
+    // Mark selected rows as "Queued", non-selected as "Skipped"
+    document.querySelectorAll('.unified-row').forEach((row, i) => {
+        const statusCell = row.querySelector('.col-status');
+        const cb = row.querySelector('input[type="checkbox"]');
+        cb.disabled = true; // Lock checkboxes during analysis
+        if (selectedIndices.includes(i)) {
+            statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Queued</span>`;
+        } else {
+            statusCell.innerHTML = `<span class="status-chip no-gap">Skipped</span>`;
+            row.classList.add('no-gap-row');
+        }
+    });
+
+    let gapAnalyzedCount = 0;
+
+    try {
+        const response = await fetch('/api/analyze-gaps', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selectedIndices }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Gap analysis failed');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const chunks = buffer.split('\n\n');
+            buffer = chunks.pop();
+
+            for (const chunk of chunks) {
+                if (!chunk.trim()) continue;
+                const lines = chunk.split('\n');
+                let eventType = '';
+                let eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+
+                if (eventType === 'progress') {
+                    const { step, message } = JSON.parse(eventData);
+                    markStep(step);
+                } else if (eventType === 'gap-started') {
+                    const { id } = JSON.parse(eventData);
+                    markRowAnalyzing(id);
+                } else if (eventType === 'gap') {
+                    const { gap } = JSON.parse(eventData);
+                    gap.hasGap = !isNoGap(gap);
+                    gaps.push(gap);
+                    gapAnalyzedCount++;
+                    enrichRowWithGap(gap);
+                    document.getElementById('gapAnalyzedCount').textContent = gapAnalyzedCount;
+                } else if (eventType === 'log') {
+                    const { message } = JSON.parse(eventData);
+                    appendLog('agentLogEntries', message);
+                } else if (eventType === 'complete') {
+                    markAllStepsDone();
+                } else if (eventType === 'error') {
+                    const { error } = JSON.parse(eventData);
+                    throw new Error(error);
+                }
+            }
+        }
+
+        // Gap analysis complete
+        analysisPhase = 'reviewed';
+        analysisComplete = true;
+        const actionableGaps = gaps.filter(g => g.hasGap).length;
+        const noGapCount = gaps.length - actionableGaps;
+        setStep(2);
+        setStatus(`${actionableGaps} Gaps / ${noGapCount} Met`, '');
+
+        // Switch from "Analyze Gaps" to "Create Issues" button
+        document.getElementById('btnAnalyzeGaps').style.display = 'none';
+        document.getElementById('btnCreateIssues').style.display = '';
+        revealCheckboxesForIssues();
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Error', 'error');
+        analysisPhase = 'selecting';
+        // Re-enable the analyze button
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            Analyze Gaps for Selected
+            <span class="btn-badge" id="analyzeCount">${selectedIndices.length}</span>
+        `;
+        // Re-enable checkboxes
+        document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => { cb.disabled = false; });
+    }
 }
 
 // ─── Mark a row as "Analyzing..." when its parallel session starts ────────────
@@ -400,28 +548,24 @@ function enrichRowWithGap(gap) {
 
 // ─── Reveal checkboxes after analysis completes ──────────────────────────────
 
-function revealCheckboxes() {
-    document.getElementById('colCheckHeader').style.display = '';
-
+function revealCheckboxesForIssues() {
+    // After gap analysis, re-show checkboxes only for gap-found rows
     document.querySelectorAll('.unified-row').forEach(row => {
         const checkTd = row.querySelector('.col-check');
-        checkTd.style.display = '';
+        const checkbox = checkTd.querySelector('input[type="checkbox"]');
+        checkbox.disabled = false;
 
         const isNoGap = row.dataset.hasGap === '0';
-        const checkbox = checkTd.querySelector('input[type="checkbox"]');
-
         if (isNoGap) {
             checkbox.disabled = true;
             checkbox.checked = false;
             checkTd.querySelector('.checkmark').classList.add('checkmark-disabled');
+            row.classList.remove('selected');
         } else {
             checkbox.checked = true;
             row.classList.add('selected');
         }
     });
-
-    document.getElementById('tableActions').style.display = 'flex';
-    document.getElementById('tableActions').style.animation = 'fadeSlideIn 0.4s var(--ease-out)';
 
     // Set selected state on gap objects
     gaps.forEach(g => { g.selected = g.hasGap; });
@@ -462,52 +606,87 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// ─── Checkbox Handling (gap table) ────────────────────────────────────────────
+// ─── Checkbox Handling (dual-phase) ───────────────────────────────────────────
 function handleCheckboxChange(index) {
-    const gap = gaps[index];
-    if (gap && gap.hasGap) {
+    if (analysisPhase === 'selecting') {
+        // Phase 1: selecting which requirements to analyze
         const checkbox = document.querySelector(`input[data-gap-index="${index}"]`);
-        gap.selected = checkbox.checked;
         const row = checkbox.closest('tr');
         row.classList.toggle('selected', checkbox.checked);
+        updateAnalyzeCount();
+    } else if (analysisPhase === 'reviewed') {
+        // Phase 2: selecting which gaps to create issues for
+        const gap = gaps.find(g => g.id === index + 1);
+        if (gap && gap.hasGap) {
+            const checkbox = document.querySelector(`input[data-gap-index="${index}"]`);
+            gap.selected = checkbox.checked;
+            const row = checkbox.closest('tr');
+            row.classList.toggle('selected', checkbox.checked);
+        }
+        updateSelectedCount();
     }
-    updateSelectedCount();
 }
 
 function handleSelectAll() {
     const selectAll = document.getElementById('selectAll');
     const checked = selectAll.checked;
-    gaps.forEach(g => {
-        if (g.hasGap) g.selected = checked;
-    });
-    document.querySelectorAll('.unified-row').forEach(row => {
-        if (row.dataset.hasGap === '0') return;
-        const cb = row.querySelector('input[type="checkbox"]');
-        if (cb) {
-            cb.checked = checked;
-            row.classList.toggle('selected', checked);
-        }
-    });
-    updateSelectedCount();
+
+    if (analysisPhase === 'selecting') {
+        document.querySelectorAll('.unified-row').forEach(row => {
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb && !cb.disabled) {
+                cb.checked = checked;
+                row.classList.toggle('selected', checked);
+            }
+        });
+        updateAnalyzeCount();
+    } else {
+        gaps.forEach(g => {
+            if (g.hasGap) g.selected = checked;
+        });
+        document.querySelectorAll('.unified-row').forEach(row => {
+            if (row.dataset.hasGap === '0') return;
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) {
+                cb.checked = checked;
+                row.classList.toggle('selected', checked);
+            }
+        });
+        updateSelectedCount();
+    }
 }
 
 function toggleAllCheckboxes() {
-    const actionable = gaps.filter(g => g.hasGap);
-    const anySelected = actionable.some(g => g.selected);
-    const newState = !anySelected;
-    gaps.forEach(g => {
-        if (g.hasGap) g.selected = newState;
-    });
-    document.querySelectorAll('.unified-row').forEach(row => {
-        if (row.dataset.hasGap === '0') return;
-        const cb = row.querySelector('input[type="checkbox"]');
-        if (cb) {
+    if (analysisPhase === 'selecting') {
+        // Toggle all requirements
+        const all = document.querySelectorAll('.unified-row input[type="checkbox"]:not(:disabled)');
+        const anyChecked = Array.from(all).some(cb => cb.checked);
+        const newState = !anyChecked;
+        all.forEach(cb => {
             cb.checked = newState;
-            row.classList.toggle('selected', newState);
-        }
-    });
-    document.getElementById('selectAll').checked = newState;
-    updateSelectedCount();
+            cb.closest('tr').classList.toggle('selected', newState);
+        });
+        document.getElementById('selectAll').checked = newState;
+        updateAnalyzeCount();
+    } else {
+        // Toggle gap-found rows for issue creation
+        const actionable = gaps.filter(g => g.hasGap);
+        const anySelected = actionable.some(g => g.selected);
+        const newState = !anySelected;
+        gaps.forEach(g => {
+            if (g.hasGap) g.selected = newState;
+        });
+        document.querySelectorAll('.unified-row').forEach(row => {
+            if (row.dataset.hasGap === '0') return;
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) {
+                cb.checked = newState;
+                row.classList.toggle('selected', newState);
+            }
+        });
+        document.getElementById('selectAll').checked = newState;
+        updateSelectedCount();
+    }
 }
 
 function updateSelectedCount() {

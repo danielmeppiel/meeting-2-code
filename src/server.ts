@@ -3,7 +3,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { CopilotClient } from "@github/copilot-sdk";
 import type { MCPLocalServerConfig, MCPRemoteServerConfig } from "@github/copilot-sdk";
-import { analyzeMeetingGaps } from "./agents/gap-analyzer.js";
+import { extractMeetingRequirements, analyzeSelectedGaps } from "./agents/gap-analyzer.js";
+import type { GapItem, MeetingInfo } from "./agents/gap-analyzer.js";
+import { createEpicIssue, linkSubIssuesToEpic } from "./agents/epic-issue.js";
 import { createGithubIssues } from "./agents/github-issues.js";
 import { assignCodingAgent } from "./agents/coding-agent.js";
 
@@ -17,17 +19,11 @@ app.use(express.static(path.join(__dirname, "..", "public")));
 const client = new CopilotClient({ logLevel: "debug" });
 
 // ─── State ────────────────────────────────────────────────────────────────────
-interface GapItem {
-    id: number;
-    requirement: string;
-    currentState: string;
-    gap: string;
-    complexity: "Low" | "Medium" | "High" | "Critical";
-    estimatedEffort: string;
-    details: string;
-}
-
+let lastRequirements: string[] = [];
+let lastMeetingInfo: MeetingInfo | null = null;
 let lastAnalysis: GapItem[] = [];
+let epicIssueNumber = 0;
+let epicIssueUrl = "";
 let createdIssues: Array<{ id: number; title: string; number: number; url: string }> = [];
 
 // ─── MCP Server configs ──────────────────────────────────────────────────────
@@ -53,37 +49,100 @@ function getGitHubMcpConfig(): Record<string, MCPLocalServerConfig | MCPRemoteSe
     };
 }
 
-// ─── API Routes ───────────────────────────────────────────────────────────────
-
-// Step 1: Extract meeting & analyze gaps (SSE for real-time streaming)
-app.get("/api/analyze", async (req, res) => {
+// ─── Helper ───────────────────────────────────────────────────────────────────
+function sseHeaders(res: express.Response) {
     res.setHeader("Content-Type", "text/event-stream");
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
-
-    const sendEvent = (event: string, data: unknown) => {
+    return (event: string, data: unknown) => {
         res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
+}
+
+// ─── API Routes ───────────────────────────────────────────────────────────────
+
+// Step 1: Extract meeting requirements + create epic (SSE)
+app.get("/api/analyze", async (req, res) => {
+    const sendEvent = sseHeaders(res);
 
     try {
-        const analysis = await analyzeMeetingGaps(client, {
+        const result = await extractMeetingRequirements(client, {
             workiqMcp: getWorkIQMcpConfig(),
-            githubMcp: getGitHubMcpConfig(),
-            onProgress: (step: number, message: string) => sendEvent("progress", { step, message }),
+            onProgress: (step, message) => sendEvent("progress", { step, message }),
             onMeetingInfo: (info) => sendEvent("meeting-info", info),
-            onRequirements: (requirements: string[]) => sendEvent("requirements", { requirements }),
-            onGapStarted: (id: number) => sendEvent("gap-started", { id }),
-            onGap: (gap) => sendEvent("gap", { gap }),
-            onLog: (message: string) => sendEvent("log", { message }),
+            onLog: (message) => sendEvent("log", { message }),
         });
-        lastAnalysis = analysis;
-        sendEvent("complete", { success: true, totalGaps: analysis.length });
+
+        lastRequirements = result.requirements;
+        lastMeetingInfo = result.info;
+        lastAnalysis = [];
+
+        // Send requirements to frontend
+        sendEvent("requirements", { requirements: result.requirements });
+
+        // Create epic issue on GitHub
+        sendEvent("progress", { step: 3, message: "Creating epic issue on GitHub..." });
+        sendEvent("log", { message: "Creating epic issue with meeting summary..." });
+
+        const epic = await createEpicIssue(
+            result.info,
+            result.requirements,
+            (msg) => sendEvent("log", { message: msg }),
+        );
+        epicIssueNumber = epic.number;
+        epicIssueUrl = epic.url;
+
+        sendEvent("epic-created", { number: epic.number, url: epic.url });
+        sendEvent("complete", { success: true });
     } catch (error) {
         console.error("Analysis error:", error);
         sendEvent("error", {
             success: false,
             error: error instanceof Error ? error.message : "Analysis failed",
+        });
+    } finally {
+        res.end();
+    }
+});
+
+// Step 1b: Analyze gaps for selected requirements (SSE via POST)
+app.post("/api/analyze-gaps", async (req, res) => {
+    const { selectedIndices } = req.body as { selectedIndices: number[] };
+
+    const selectedReqs = (selectedIndices || [])
+        .filter((i: number) => i >= 0 && i < lastRequirements.length)
+        .map((i: number) => ({ index: i, text: lastRequirements[i]! }));
+
+    if (selectedReqs.length === 0) {
+        return res.status(400).json({ success: false, error: "No requirements selected" });
+    }
+
+    const sendEvent = sseHeaders(res);
+
+    try {
+        const analysis = await analyzeSelectedGaps(client, {
+            requirements: selectedReqs,
+            githubMcp: getGitHubMcpConfig(),
+            onProgress: (step, message) => sendEvent("progress", { step, message }),
+            onGapStarted: (id) => sendEvent("gap-started", { id }),
+            onGap: (gap) => sendEvent("gap", { gap }),
+            onLog: (message) => sendEvent("log", { message }),
+        });
+
+        // Merge into lastAnalysis (keep previous results, add/replace new)
+        for (const gap of analysis) {
+            const existing = lastAnalysis.findIndex(g => g.id === gap.id);
+            if (existing >= 0) lastAnalysis[existing] = gap;
+            else lastAnalysis.push(gap);
+        }
+
+        sendEvent("complete", { success: true, totalGaps: analysis.length });
+    } catch (error) {
+        console.error("Gap analysis error:", error);
+        sendEvent("error", {
+            success: false,
+            error: error instanceof Error ? error.message : "Gap analysis failed",
         });
     } finally {
         res.end();
@@ -99,25 +158,25 @@ app.post("/api/create-issues", async (req, res) => {
         return res.status(400).json({ success: false, error: "No items selected" });
     }
 
-    // Switch to SSE streaming
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-
-    const sendEvent = (event: string, data: unknown) => {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    };
+    const sendEvent = sseHeaders(res);
 
     try {
         const issues = await createGithubIssues({
             gaps: selectedGaps,
+            epicIssueNumber: epicIssueNumber > 0 ? epicIssueNumber : undefined,
             onProgress: (current, total, message) => sendEvent("progress", { current, total, message }),
             onIssueCreated: (issue) => sendEvent("issue", { issue }),
             onLog: (message) => sendEvent("log", { message }),
         });
 
         createdIssues = issues;
+
+        // Link sub-issues to epic
+        if (epicIssueNumber > 0) {
+            const subNums = issues.filter(i => i.number > 0).map(i => i.number);
+            await linkSubIssuesToEpic(epicIssueNumber, subNums, (msg) => sendEvent("log", { message: msg }));
+        }
+
         sendEvent("complete", { success: true, total: issues.length });
     } catch (error) {
         console.error("Issue creation error:", error);
@@ -138,15 +197,7 @@ app.post("/api/assign-coding-agent", async (req, res) => {
         return res.status(400).json({ success: false, error: "No issues provided" });
     }
 
-    // Switch to SSE streaming
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
-
-    const sendEvent = (event: string, data: unknown) => {
-        res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    };
+    const sendEvent = sseHeaders(res);
 
     try {
         const results = await assignCodingAgent({
