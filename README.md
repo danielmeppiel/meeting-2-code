@@ -20,19 +20,11 @@ The app walks through a three-step pipeline, fully streamed to the browser in re
 | **2. Analyze & Create** | Compares each requirement against the target repo's codebase, identifies gaps, and creates GitHub Issues | GitHub MCP + Copilot SDK + `gh` CLI |
 | **3. Assign & Ship** | Assigns the Copilot coding agent (`copilot-swe-agent`) to each issue so it opens PRs automatically | GitHub REST API |
 
-```
-┌──────────────┐      ┌──────────────────┐      ┌─────────────────┐
-│  M365 Meeting │─────▶│  Gap Analysis     │─────▶│  GitHub Issues   │
-│  (WorkIQ MCP) │      │  (GitHub MCP +    │      │  (gh CLI)        │
-│               │      │   Copilot SDK)    │      │                  │
-└──────────────┘      └──────────────────┘      └────────┬────────┘
-                                                          │
-                                                          ▼
-                                                ┌─────────────────┐
-                                                │  Copilot Coding  │
-                                                │  Agent (REST API)│
-                                                │  ─── opens PRs ──│
-                                                └─────────────────┘
+```mermaid
+flowchart LR
+    A["M365 Meeting\n(WorkIQ MCP)"] --> B["Gap Analysis\n(GitHub MCP +\nCopilot SDK)"]
+    B --> C["GitHub Issues\n(gh CLI)"]
+    C --> D["Copilot Coding Agent\n(REST API)\n— opens PRs —"]
 ```
 
 ## Architecture
@@ -116,4 +108,4 @@ npm run build
 
 ## License
 
-ISC
+[MIT](LICENSE)
