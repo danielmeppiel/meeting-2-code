@@ -169,8 +169,8 @@ function markAllStepsDone() {
     });
 }
 
-async function startAnalysis() {
-    const btn = document.getElementById('btnAnalyze');
+async function requestConsultation() {
+    const btn = document.getElementById('btnConsultation');
     btn.disabled = true;
     analysisComplete = false;
     analysisPhase = 'extracting';
@@ -1568,7 +1568,7 @@ function resetApp() {
     setStep(1);
     setStatus('Ready', '');
     showPanel('panel-analyze');
-    document.getElementById('btnAnalyze').disabled = false;
+    document.getElementById('btnConsultation').disabled = false;
     // Reset agent column visibility
     const colAgentHeader = document.getElementById('colAgentHeader');
     if (colAgentHeader) colAgentHeader.style.display = 'none';
