@@ -1,0 +1,1591 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Meeting → Code | Application Logic
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let gaps = [];
+let requirements = [];
+let createdIssues = [];
+let currentStep = 1;
+let analysisComplete = false;
+let analysisPhase = 'idle'; // 'idle' | 'extracting' | 'selecting' | 'analyzing' | 'reviewed'
+let epicIssueNumber = 0;
+let epicIssueUrl = '';
+let deployedUrl = '';
+let validationResults = [];
+
+// ─── Panel Management ─────────────────────────────────────────────────────────
+function showPanel(panelId) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    const panel = document.getElementById(panelId);
+    if (panel) {
+        panel.classList.add('active');
+        panel.style.animation = 'none';
+        panel.offsetHeight;
+        panel.style.animation = '';
+    }
+
+    const fab = document.getElementById('fabDeploy');
+    if (fab) {
+        if (panelId === 'panel-deploy') {
+            fab.classList.add('hidden');
+        } else {
+            fab.classList.remove('hidden');
+        }
+    }
+}
+
+function setStep(step) {
+    currentStep = step;
+    document.querySelectorAll('.step').forEach(s => {
+        const stepNum = parseInt(s.dataset.step);
+        s.classList.remove('active', 'completed');
+        if (stepNum < step) s.classList.add('completed');
+        else if (stepNum === step) s.classList.add('active');
+    });
+}
+
+function setStatus(text, type = '') {
+    const badge = document.getElementById('statusBadge');
+    const statusText = badge.querySelector('.status-text');
+    badge.className = 'status-badge ' + type;
+    statusText.textContent = text;
+}
+
+// ─── Streaming Log ────────────────────────────────────────────────────────────
+function appendLog(containerId, message) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const entry = document.createElement('div');
+    entry.className = 'agent-log-entry';
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    entry.innerHTML = `<span class="log-time">${time}</span> ${escapeHtml(message)}`;
+    container.appendChild(entry);
+    container.scrollTop = container.scrollHeight;
+}
+
+// ─── Toast Notifications ──────────────────────────────────────────────────────
+function showToast(message, type = 'error') {
+    const existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+
+    const msgSpan = document.createElement('span');
+    msgSpan.className = 'toast-message';
+    msgSpan.textContent = message;
+    toast.appendChild(msgSpan);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'toast-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.onclick = () => toast.remove();
+    toast.appendChild(closeBtn);
+
+    document.body.appendChild(toast);
+
+    // Errors stay until dismissed; others auto-dismiss
+    if (type !== 'error') {
+        setTimeout(() => toast.remove(), 6000);
+    }
+}
+
+// ─── No-Gap Detection ─────────────────────────────────────────────────────────
+function isNoGap(gap) {
+    const text = (gap.gap || '').toLowerCase();
+    const patterns = [
+        'no gap', 'none', 'no changes needed', 'already implemented',
+        'fully implemented', 'no action', 'requirement met', 'requirement is met',
+        'no modification', 'no work needed', 'n/a', 'not applicable',
+        'already exists', 'already in place', 'no additional', 'fully met',
+        'compliant', 'complete as-is', 'nothing to', 'no missing',
+    ];
+    return patterns.some(p => text.includes(p));
+}
+
+// ─── Step 1: Analyze Meeting ──────────────────────────────────────────────────
+const stepIds = ['ls-fetch', 'ls-extract', 'ls-requirements', 'ls-analyze', 'ls-complexity'];
+
+function markStep(stepNum) {
+    stepIds.forEach((id, i) => {
+        const el = document.getElementById(id);
+        el.classList.remove('active');
+        el.querySelector('.loading-step-icon').classList.remove('spinner');
+        if (i < stepNum) {
+            el.classList.add('done');
+        } else if (i === stepNum) {
+            el.classList.add('active');
+            el.querySelector('.loading-step-icon').classList.add('spinner');
+        }
+    });
+}
+
+function markAllStepsDone() {
+    stepIds.forEach(id => {
+        const el = document.getElementById(id);
+        el.classList.remove('active');
+        el.classList.add('done');
+        el.querySelector('.loading-step-icon').classList.remove('spinner');
+    });
+}
+
+async function startAnalysis() {
+    const btn = document.getElementById('btnAnalyze');
+    btn.disabled = true;
+    analysisComplete = false;
+    analysisPhase = 'extracting';
+
+    setStatus('Analyzing...', 'processing');
+    showPanel('panel-loading');
+
+    // Reset progress steps
+    stepIds.forEach(s => {
+        const el = document.getElementById(s);
+        el.classList.remove('active', 'done');
+        el.querySelector('.loading-step-icon').classList.remove('spinner');
+    });
+
+    // Reset unified table
+    document.getElementById('unifiedTableContainer').style.display = 'none';
+    document.getElementById('unifiedTableBody').innerHTML = '';
+    document.getElementById('reqCount').textContent = '0';
+    document.getElementById('gapAnalyzedCount').textContent = '0';
+    document.getElementById('tableActions').style.display = 'none';
+    document.getElementById('colCheckHeader').style.display = 'none';
+    document.getElementById('btnAnalyzeGaps').style.display = '';
+    document.getElementById('btnCreateIssues').style.display = 'none';
+
+    // Reset epic link
+    document.getElementById('epicLink').style.display = 'none';
+    epicIssueNumber = 0;
+    epicIssueUrl = '';
+
+    // Show meeting card with initial state
+    const liveRight = document.getElementById('liveRightPanel');
+    if (liveRight) liveRight.style.display = '';
+    const meetingCard = document.getElementById('meetingCard');
+    meetingCard.style.display = 'flex';
+    meetingCard.classList.remove('found');
+    document.getElementById('meetingCardIcon').className = 'meeting-card-icon';
+    document.getElementById('meetingCardTitle').textContent = 'Connecting to WorkIQ...';
+    document.getElementById('meetingCardDate').textContent = '';
+    document.getElementById('meetingCardParticipants').style.display = 'none';
+    document.getElementById('meetingCardStatusRow').style.display = 'flex';
+    document.getElementById('meetingCardStatus').textContent = 'Initializing session...';
+
+    // Reset agent log
+    document.getElementById('agentLogEntries').innerHTML = '';
+
+    requirements = [];
+    gaps = [];
+
+    markStep(0);
+
+    try {
+        const result = await new Promise((resolve, reject) => {
+            const eventSource = new EventSource('/api/analyze');
+
+            eventSource.addEventListener('progress', (e) => {
+                const { step, message } = JSON.parse(e.data);
+                console.log(`[Progress] Step ${step}: ${message}`);
+                markStep(step);
+
+                // Keep meeting card in sync with progress steps
+                const cardTitle = document.getElementById('meetingCardTitle');
+                const cardStatus = document.getElementById('meetingCardStatus');
+                if (step === 0) {
+                    cardTitle.textContent = 'Searching for meeting...';
+                    cardStatus.textContent = 'Connected to WorkIQ';
+                } else if (step === 1) {
+                    cardTitle.textContent = 'Meeting found';
+                    cardStatus.textContent = 'Fetching meeting data...';
+                } else if (step === 2) {
+                    cardStatus.textContent = 'Extracting requirements...';
+                } else if (step === 3) {
+                    cardStatus.textContent = 'Creating epic issue...';
+                }
+            });
+
+            eventSource.addEventListener('meeting-info', (e) => {
+                const info = JSON.parse(e.data);
+                const card = document.getElementById('meetingCard');
+                card.style.display = 'flex';
+                card.classList.add('found');
+                const iconEl = document.getElementById('meetingCardIcon');
+                iconEl.className = 'meeting-card-icon found';
+                iconEl.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+                document.getElementById('meetingCardTitle').textContent = 'Meeting Found';
+                if (info.date) {
+                    document.getElementById('meetingCardDate').textContent = info.date;
+                }
+                if (info.title) {
+                    const dateEl = document.getElementById('meetingCardDate');
+                    dateEl.textContent = (info.date ? info.date + '  ·  ' : '') + info.title;
+                }
+                if (info.participants && info.participants.length > 0) {
+                    const el = document.getElementById('meetingCardParticipants');
+                    el.style.display = 'flex';
+                    el.innerHTML = info.participants.map(p => `<span class="participant-chip">${escapeHtml(p)}</span>`).join('');
+                }
+                document.getElementById('meetingCardStatus').textContent = info.requirementCount
+                    ? `Extracting ${info.requirementCount} requirements...`
+                    : 'Extracting requirements...';
+            });
+
+            eventSource.addEventListener('requirements', (e) => {
+                const data = JSON.parse(e.data);
+                requirements = data.requirements;
+                console.log(`[Requirements] ${requirements.length} items`);
+                // Hide meeting card, show table with checkboxes
+                document.getElementById('meetingCard').style.display = 'none';
+                renderRequirementsForSelection(requirements);
+            });
+
+            eventSource.addEventListener('epic-created', (e) => {
+                const { number, url } = JSON.parse(e.data);
+                epicIssueNumber = number;
+                epicIssueUrl = url;
+                if (number > 0) {
+                    const link = document.getElementById('epicLink');
+                    link.href = url;
+                    link.style.display = 'inline-flex';
+                    document.getElementById('epicNumber').textContent = number;
+                }
+            });
+
+            eventSource.addEventListener('log', (e) => {
+                const { message } = JSON.parse(e.data);
+                appendLog('agentLogEntries', message);
+            });
+
+            eventSource.addEventListener('complete', (e) => {
+                eventSource.close();
+                const data = JSON.parse(e.data);
+                // Mark steps 0-3 done (extraction + epic), leave step 4 for user-triggered gap analysis
+                [0, 1, 2, 3].forEach(i => {
+                    const el = document.getElementById(stepIds[i]);
+                    el.classList.remove('active');
+                    el.classList.add('done');
+                    el.querySelector('.loading-step-icon').classList.remove('spinner');
+                });
+                resolve(data);
+            });
+
+            eventSource.addEventListener('error', (e) => {
+                if (e.data) {
+                    eventSource.close();
+                    const data = JSON.parse(e.data);
+                    reject(new Error(data.error || 'Analysis failed'));
+                    return;
+                }
+                eventSource.close();
+                reject(new Error('Connection to server lost during analysis'));
+            });
+        });
+
+        if (!result.success) throw new Error('Extraction failed');
+
+        // Extraction done — enter selection phase
+        analysisPhase = 'selecting';
+        setStatus(`${requirements.length} Requirements`, '');
+        setStep(2);
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Error', 'error');
+        showPanel('panel-analyze');
+        btn.disabled = false;
+        analysisPhase = 'idle';
+    }
+}
+
+// ─── Render requirements for user selection (before gap analysis) ─────────────
+
+function renderRequirementsForSelection(reqs) {
+    const container = document.getElementById('unifiedTableContainer');
+    const tbody = document.getElementById('unifiedTableBody');
+    const count = document.getElementById('reqCount');
+
+    container.style.display = '';
+    count.textContent = reqs.length;
+    tbody.innerHTML = '';
+
+    reqs.forEach((req, i) => {
+        const tr = document.createElement('tr');
+        tr.id = `unified-row-${i}`;
+        tr.dataset.index = i;
+        tr.style.animationDelay = `${i * 0.04}s`;
+        tr.classList.add('unified-row', 'selected');
+        tr.innerHTML = `
+            <td class="col-check">
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" data-gap-index="${i}" checked onchange="handleCheckboxChange(${i})">
+                    <span class="checkmark"></span>
+                </label>
+            </td>
+            <td class="col-req">
+                <div class="td-requirement">${escapeHtml(req)}</div>
+            </td>
+            <td class="col-status">
+                <span class="status-chip pending">Pending</span>
+            </td>
+            <td class="col-current"><span class="cell-pending">—</span></td>
+            <td class="col-gap"><span class="cell-pending">—</span></td>
+            <td class="col-complexity"><span class="cell-pending">—</span></td>
+            <td class="col-effort"><span class="cell-pending">—</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Show checkboxes + analyze button immediately
+    document.getElementById('colCheckHeader').style.display = '';
+    document.getElementById('tableActions').style.display = 'flex';
+    document.getElementById('tableActions').style.animation = 'fadeSlideIn 0.4s var(--ease-out)';
+    document.getElementById('selectAll').checked = true;
+    updateAnalyzeCount();
+}
+
+function updateAnalyzeCount() {
+    let count = 0;
+    document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) count++;
+    });
+    document.getElementById('analyzeCount').textContent = count;
+    document.getElementById('btnAnalyzeGaps').disabled = count === 0;
+}
+
+// ─── Step 1b: Gap Analysis for Selected Requirements ──────────────────────────
+
+async function startGapAnalysis() {
+    // Gather selected requirement indices
+    const selectedIndices = [];
+    document.querySelectorAll('.unified-row').forEach((row, i) => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb && cb.checked) selectedIndices.push(i);
+    });
+
+    if (selectedIndices.length === 0) {
+        showToast('Please select at least one requirement to analyze.');
+        return;
+    }
+
+    analysisPhase = 'analyzing';
+    const btn = document.getElementById('btnAnalyzeGaps');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Analyzing ${selectedIndices.length}...`;
+    setStatus('Analyzing Gaps...', 'processing');
+
+    // Mark selected rows as "Queued", non-selected as "Skipped"
+    document.querySelectorAll('.unified-row').forEach((row, i) => {
+        const statusCell = row.querySelector('.col-status');
+        const cb = row.querySelector('input[type="checkbox"]');
+        cb.disabled = true; // Lock checkboxes during analysis
+        if (selectedIndices.includes(i)) {
+            statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Queued</span>`;
+        } else {
+            statusCell.innerHTML = `<span class="status-chip no-gap">Skipped</span>`;
+            row.classList.add('no-gap-row');
+        }
+    });
+
+    let gapAnalyzedCount = 0;
+
+    try {
+        const response = await fetch('/api/analyze-gaps', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selectedIndices }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Gap analysis failed');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const chunks = buffer.split('\n\n');
+            buffer = chunks.pop();
+
+            for (const chunk of chunks) {
+                if (!chunk.trim()) continue;
+                const lines = chunk.split('\n');
+                let eventType = '';
+                let eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+
+                if (eventType === 'progress') {
+                    const { step, message } = JSON.parse(eventData);
+                    markStep(step);
+                } else if (eventType === 'gap-started') {
+                    const { id } = JSON.parse(eventData);
+                    markRowAnalyzing(id);
+                } else if (eventType === 'gap') {
+                    const { gap } = JSON.parse(eventData);
+                    gap.hasGap = !isNoGap(gap);
+                    gaps.push(gap);
+                    gapAnalyzedCount++;
+                    enrichRowWithGap(gap);
+                    document.getElementById('gapAnalyzedCount').textContent = gapAnalyzedCount;
+                } else if (eventType === 'log') {
+                    const { message } = JSON.parse(eventData);
+                    appendLog('agentLogEntries', message);
+                } else if (eventType === 'complete') {
+                    markAllStepsDone();
+                } else if (eventType === 'error') {
+                    const { error } = JSON.parse(eventData);
+                    throw new Error(error);
+                }
+            }
+        }
+
+        // Gap analysis complete
+        analysisPhase = 'reviewed';
+        analysisComplete = true;
+        const actionableGaps = gaps.filter(g => g.hasGap).length;
+        const noGapCount = gaps.length - actionableGaps;
+        setStep(2);
+        setStatus(`${actionableGaps} Gaps / ${noGapCount} Met`, '');
+
+        // Switch from "Analyze Gaps" to "Create Issues" button
+        document.getElementById('btnAnalyzeGaps').style.display = 'none';
+        document.getElementById('btnCreateIssues').style.display = '';
+        revealCheckboxesForIssues();
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Error', 'error');
+        analysisPhase = 'selecting';
+        // Re-enable the analyze button
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            Analyze Gaps for Selected
+            <span class="btn-badge" id="analyzeCount">${selectedIndices.length}</span>
+        `;
+        // Re-enable checkboxes
+        document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => { cb.disabled = false; });
+    }
+}
+
+// ─── Mark a row as "Analyzing..." when its parallel session starts ────────────
+
+function markRowAnalyzing(gapId) {
+    const idx = gapId - 1;
+    const row = document.getElementById(`unified-row-${idx}`);
+    if (!row) return;
+
+    const statusCell = row.querySelector('.col-status');
+    if (statusCell) {
+        statusCell.innerHTML = `
+            <span class="status-chip analyzing active">
+                <span class="status-chip-dot"></span>
+                Analyzing
+            </span>
+        `;
+    }
+}
+
+// ─── Enrich a row when gap data arrives ──────────────────────────────────────
+
+function enrichRowWithGap(gap) {
+    const tbody = document.getElementById('unifiedTableBody');
+    const rows = tbody.querySelectorAll('.unified-row');
+    let targetRow = null;
+
+    const idx = gap.id - 1;
+    if (idx >= 0 && idx < rows.length) {
+        targetRow = rows[idx];
+    }
+
+    if (!targetRow) {
+        for (const row of rows) {
+            const reqCell = row.querySelector('.td-requirement');
+            if (reqCell && reqCell.textContent.trim() === gap.requirement.trim()) {
+                targetRow = row;
+                break;
+            }
+        }
+    }
+
+    if (!targetRow) return;
+
+    const cells = targetRow.querySelectorAll('td');
+    const noGap = !gap.hasGap;
+
+    if (noGap) {
+        // Mark as "No Gap" — requirement already met
+        cells[2].innerHTML = `<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> No Gap</span>`;
+        cells[3].innerHTML = `<span class="text-muted">${escapeHtml(gap.currentState)}</span>`;
+        cells[4].innerHTML = `<span class="text-muted">${escapeHtml(gap.gap)}</span>`;
+        cells[5].innerHTML = `<span class="text-muted">—</span>`;
+        cells[5].style.textAlign = 'center';
+        cells[6].innerHTML = `<span class="text-muted">—</span>`;
+        targetRow.classList.add('no-gap-row');
+    } else {
+        cells[2].innerHTML = `<span class="status-chip analyzed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Gap Found</span>`;
+        cells[3].innerHTML = escapeHtml(gap.currentState);
+        cells[4].innerHTML = escapeHtml(gap.gap);
+        cells[5].innerHTML = `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${gap.complexity}</span>`;
+        cells[5].style.textAlign = 'center';
+        cells[6].textContent = gap.estimatedEffort;
+    }
+
+    targetRow.dataset.details = gap.details || '';
+    targetRow.dataset.gapId = gap.id;
+    targetRow.dataset.hasGap = gap.hasGap ? '1' : '0';
+
+    const reqDiv = cells[1].querySelector('.td-requirement');
+    if (reqDiv && gap.details) {
+        reqDiv.onclick = () => toggleDetails(targetRow);
+        reqDiv.style.cursor = 'pointer';
+    }
+
+    targetRow.classList.add('row-enriched');
+    setTimeout(() => targetRow.classList.remove('row-enriched'), 1200);
+}
+
+// ─── Reveal checkboxes after analysis completes ──────────────────────────────
+
+function revealCheckboxesForIssues() {
+    // After gap analysis, re-show checkboxes only for gap-found rows
+    document.querySelectorAll('.unified-row').forEach(row => {
+        const checkTd = row.querySelector('.col-check');
+        const checkbox = checkTd.querySelector('input[type="checkbox"]');
+        checkbox.disabled = false;
+
+        const isNoGap = row.dataset.hasGap === '0';
+        if (isNoGap) {
+            checkbox.disabled = true;
+            checkbox.checked = false;
+            checkTd.querySelector('.checkmark').classList.add('checkmark-disabled');
+            row.classList.remove('selected');
+        } else {
+            checkbox.checked = true;
+            row.classList.add('selected');
+        }
+    });
+
+    // Set selected state on gap objects
+    gaps.forEach(g => { g.selected = g.hasGap; });
+
+    const selectAll = document.getElementById('selectAll');
+    selectAll.checked = gaps.filter(g => g.hasGap).length > 0;
+    updateSelectedCount();
+}
+
+// ─── Details toggle ──────────────────────────────────────────────────────────
+
+function toggleDetails(row) {
+    const details = row.dataset.details;
+    if (!details) return;
+
+    const existing = row.nextElementSibling;
+    if (existing && existing.classList.contains('row-details')) {
+        existing.classList.toggle('show');
+        row.querySelector('.td-requirement')?.classList.toggle('expanded');
+        return;
+    }
+
+    const detailRow = document.createElement('tr');
+    detailRow.className = 'row-details show';
+    detailRow.innerHTML = `
+        <td colspan="7">
+            <div class="details-label">Implementation Details</div>
+            <div class="details-content">${escapeHtml(details)}</div>
+        </td>
+    `;
+    row.after(detailRow);
+    row.querySelector('.td-requirement')?.classList.add('expanded');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
+// ─── Checkbox Handling (dual-phase) ───────────────────────────────────────────
+function handleCheckboxChange(index) {
+    if (analysisPhase === 'selecting') {
+        // Phase 1: selecting which requirements to analyze
+        const checkbox = document.querySelector(`input[data-gap-index="${index}"]`);
+        const row = checkbox.closest('tr');
+        row.classList.toggle('selected', checkbox.checked);
+        updateAnalyzeCount();
+    } else if (analysisPhase === 'reviewed') {
+        // Phase 2: selecting which gaps to create issues for
+        const gap = gaps.find(g => g.id === index + 1);
+        if (gap && gap.hasGap) {
+            const checkbox = document.querySelector(`input[data-gap-index="${index}"]`);
+            gap.selected = checkbox.checked;
+            const row = checkbox.closest('tr');
+            row.classList.toggle('selected', checkbox.checked);
+        }
+        updateSelectedCount();
+    }
+}
+
+function handleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checked = selectAll.checked;
+
+    if (analysisPhase === 'selecting') {
+        document.querySelectorAll('.unified-row').forEach(row => {
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb && !cb.disabled) {
+                cb.checked = checked;
+                row.classList.toggle('selected', checked);
+            }
+        });
+        updateAnalyzeCount();
+    } else {
+        gaps.forEach(g => {
+            if (g.hasGap) g.selected = checked;
+        });
+        document.querySelectorAll('.unified-row').forEach(row => {
+            if (row.dataset.hasGap === '0') return;
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) {
+                cb.checked = checked;
+                row.classList.toggle('selected', checked);
+            }
+        });
+        updateSelectedCount();
+    }
+}
+
+function toggleAllCheckboxes() {
+    if (analysisPhase === 'selecting') {
+        // Toggle all requirements
+        const all = document.querySelectorAll('.unified-row input[type="checkbox"]:not(:disabled)');
+        const anyChecked = Array.from(all).some(cb => cb.checked);
+        const newState = !anyChecked;
+        all.forEach(cb => {
+            cb.checked = newState;
+            cb.closest('tr').classList.toggle('selected', newState);
+        });
+        document.getElementById('selectAll').checked = newState;
+        updateAnalyzeCount();
+    } else {
+        // Toggle gap-found rows for issue creation
+        const actionable = gaps.filter(g => g.hasGap);
+        const anySelected = actionable.some(g => g.selected);
+        const newState = !anySelected;
+        gaps.forEach(g => {
+            if (g.hasGap) g.selected = newState;
+        });
+        document.querySelectorAll('.unified-row').forEach(row => {
+            if (row.dataset.hasGap === '0') return;
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) {
+                cb.checked = newState;
+                row.classList.toggle('selected', newState);
+            }
+        });
+        document.getElementById('selectAll').checked = newState;
+        updateSelectedCount();
+    }
+}
+
+function updateSelectedCount() {
+    const actionable = gaps.filter(g => g.hasGap);
+    const count = actionable.filter(g => g.selected).length;
+    document.getElementById('selectedCount').textContent = count;
+    document.getElementById('btnCreateIssues').disabled = count === 0;
+
+    const selectAll = document.getElementById('selectAll');
+    selectAll.checked = count === actionable.length && actionable.length > 0;
+    selectAll.indeterminate = count > 0 && count < actionable.length;
+}
+
+// ─── Step 2: Create Issues (SSE streaming) ────────────────────────────────────
+async function createIssues() {
+    const selectedGaps = gaps.filter(g => g.selected && g.hasGap);
+    if (selectedGaps.length === 0) {
+        showToast('Please select at least one gap to create issues for.');
+        return;
+    }
+
+    const selectedIds = selectedGaps.map(g => g.id);
+    const total = selectedIds.length;
+
+    const btn = document.getElementById('btnCreateIssues');
+    btn.disabled = true;
+    setStatus('Creating Issues...', 'processing');
+    setStep(3);
+
+    // Switch to issues panel and reset it
+    createdIssues = [];
+    document.getElementById('issueCreationProgress').style.display = 'block';
+    document.getElementById('issueProgressLabel').textContent = `0 / ${total}`;
+    document.getElementById('issueProgressFill').style.width = '0%';
+    document.getElementById('issueProgressDetail').textContent = 'Connecting to GitHub...';
+    document.getElementById('issueTableHeader').style.display = 'none';
+    document.getElementById('issueTableContainer').style.display = 'none';
+    document.getElementById('issueTableBody').innerHTML = '';
+    document.getElementById('issueLog').style.display = 'block';
+    document.getElementById('issueLogEntries').innerHTML = '';
+    showPanel('panel-issues');
+
+    try {
+        const response = await fetch('/api/create-issues', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selectedIds }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to create issues');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            // Parse SSE events from buffer
+            const chunks = buffer.split('\n\n');
+            buffer = chunks.pop(); // keep incomplete chunk
+
+            for (const chunk of chunks) {
+                if (!chunk.trim()) continue;
+                const lines = chunk.split('\n');
+                let eventType = '';
+                let eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+
+                if (eventType === 'progress') {
+                    const { current, total: t, message } = JSON.parse(eventData);
+                    document.getElementById('issueProgressLabel').textContent = `${current} / ${t}`;
+                    document.getElementById('issueProgressFill').style.width = `${(current / t) * 100}%`;
+                    document.getElementById('issueProgressDetail').textContent = message;
+                } else if (eventType === 'issue') {
+                    const { issue } = JSON.parse(eventData);
+                    createdIssues.push(issue);
+                    // Show table as soon as first issue arrives
+                    document.getElementById('issueTableContainer').style.display = 'block';
+                    appendIssueRow(issue);
+                } else if (eventType === 'log') {
+                    const { message } = JSON.parse(eventData);
+                    appendLog('issueLogEntries', message);
+                } else if (eventType === 'complete') {
+                    finalizeIssueCreation();
+                } else if (eventType === 'error') {
+                    const { error } = JSON.parse(eventData);
+                    throw new Error(error);
+                }
+            }
+        }
+
+        // In case complete event wasn't in the last chunk
+        if (createdIssues.length > 0 && document.getElementById('issueTableHeader').style.display === 'none') {
+            finalizeIssueCreation();
+        }
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Error', 'error');
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+            Create Issues for Selected
+            <span class="btn-badge" id="selectedCount">${selectedIds.length}</span>
+        `;
+    }
+}
+
+function appendIssueRow(issue) {
+    const tbody = document.getElementById('issueTableBody');
+    const tr = document.createElement('tr');
+    tr.classList.add('issue-row');
+    tr.dataset.issueNumber = issue.number;
+
+    const failed = !issue.number || issue.number === 0 || issue.error;
+
+    let issueNumCell;
+    let statusCell;
+    let checkboxCell;
+
+    if (failed) {
+        issueNumCell = `<span class="text-muted">—</span>`;
+        statusCell = `<span class="status-chip failed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Failed</span>`;
+        checkboxCell = `
+            <label class="checkbox-wrapper">
+                <input type="checkbox" data-issue-num="0" disabled>
+                <span class="checkmark"></span>
+            </label>
+        `;
+        tr.classList.add('issue-row-failed');
+    } else {
+        const issueUrl = issue.url && issue.url !== '#'
+            ? `<a href="${escapeHtml(issue.url)}" target="_blank" class="issue-link">#${issue.number} <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`
+            : `<span class="text-muted">#${issue.number}</span>`;
+        issueNumCell = issueUrl;
+        statusCell = `<span class="status-chip analyzed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Created</span>`;
+        checkboxCell = `
+            <label class="checkbox-wrapper">
+                <input type="checkbox" data-issue-num="${issue.number}" checked onchange="handleIssueCheckboxChange(${issue.number})">
+                <span class="checkmark"></span>
+            </label>
+        `;
+    }
+
+    tr.innerHTML = `
+        <td class="col-check">${checkboxCell}</td>
+        <td class="col-issue-num">${issueNumCell}</td>
+        <td class="col-req"><div class="td-requirement" style="cursor:default;">${escapeHtml(issue.title)}</div></td>
+        <td class="col-issue-status">${statusCell}</td>
+    `;
+    tbody.appendChild(tr);
+
+    issue.selectedForAssign = !failed;
+
+    // Auto-scroll table
+    const container = document.getElementById('issueTableContainer');
+    if (container) container.scrollTop = container.scrollHeight;
+}
+
+function finalizeIssueCreation() {
+    // Hide progress, show header + actions
+    document.getElementById('issueCreationProgress').style.display = 'none';
+    document.getElementById('issueTableHeader').style.display = 'flex';
+
+    const successCount = createdIssues.filter(i => i.number > 0 && !i.error).length;
+    const failCount = createdIssues.length - successCount;
+
+    document.getElementById('issueCount').textContent = successCount;
+
+    // Select all successful by default
+    document.getElementById('selectAllIssues').checked = successCount > 0;
+    updateAssignCount();
+
+    if (failCount > 0 && successCount > 0) {
+        setStatus(`${successCount} Issues Created, ${failCount} Failed`, 'warning');
+        showToast(`${failCount} issue(s) failed to create. Check logs for details.`);
+    } else if (failCount > 0 && successCount === 0) {
+        setStatus('All Issues Failed', 'error');
+        showToast('All issues failed to create. Check logs for details.');
+    } else {
+        setStatus(`${successCount} Issues Created`, '');
+    }
+}
+
+// ─── Issue checkbox handling ──────────────────────────────────────────────────
+function handleIssueCheckboxChange(issueNumber) {
+    const issue = createdIssues.find(i => i.number === issueNumber);
+    if (issue) {
+        const cb = document.querySelector(`input[data-issue-num="${issueNumber}"]`);
+        issue.selectedForAssign = cb.checked;
+        cb.closest('tr').classList.toggle('selected', cb.checked);
+    }
+    updateAssignCount();
+}
+
+function handleSelectAllIssues() {
+    const checked = document.getElementById('selectAllIssues').checked;
+    createdIssues.forEach(i => { i.selectedForAssign = checked; });
+    document.querySelectorAll('.issue-row input[type="checkbox"]').forEach(cb => {
+        cb.checked = checked;
+        cb.closest('tr').classList.toggle('selected', checked);
+    });
+    updateAssignCount();
+}
+
+function toggleAllIssueCheckboxes() {
+    const anySelected = createdIssues.some(i => i.selectedForAssign);
+    const newState = !anySelected;
+    createdIssues.forEach(i => { i.selectedForAssign = newState; });
+    document.querySelectorAll('.issue-row input[type="checkbox"]').forEach(cb => {
+        cb.checked = newState;
+        cb.closest('tr').classList.toggle('selected', newState);
+    });
+    document.getElementById('selectAllIssues').checked = newState;
+    updateAssignCount();
+}
+
+function updateAssignCount() {
+    const assignable = createdIssues.filter(i => i.number > 0 && !i.error);
+    const count = assignable.filter(i => i.selectedForAssign).length;
+    document.getElementById('assignCount').textContent = count;
+    document.getElementById('btnAssignAgent').disabled = count === 0;
+
+    const selectAll = document.getElementById('selectAllIssues');
+    selectAll.checked = count === assignable.length && assignable.length > 0;
+    selectAll.indeterminate = count > 0 && count < assignable.length;
+}
+
+// ─── Step 3: Assign Coding Agent ──────────────────────────────────────────────
+async function assignAgent() {
+    const selectedIssues = createdIssues.filter(i => i.selectedForAssign);
+    if (selectedIssues.length === 0) {
+        showToast('Please select at least one issue to assign.');
+        return;
+    }
+
+    const btn = document.getElementById('btnAssignAgent');
+    btn.disabled = true;
+    btn.innerHTML = `
+        <div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div>
+        Assigning Copilot...
+    `;
+
+    setStatus('Assigning Agent...', 'processing');
+
+    const issueNumbers = selectedIssues.map(i => i.number).filter(n => n > 0);
+    const total = issueNumbers.length;
+
+    // Show assignment progress area
+    document.getElementById('assignProgress').style.display = 'block';
+    document.getElementById('assignProgressLabel').textContent = `0 / ${total}`;
+    document.getElementById('assignProgressFill').style.width = '0%';
+    document.getElementById('assignLogEntries').innerHTML = '';
+
+    let assignResults = [];
+
+    try {
+        const response = await fetch('/api/assign-coding-agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ issueNumbers }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to assign coding agent');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const chunks = buffer.split('\n\n');
+            buffer = chunks.pop();
+
+            for (const chunk of chunks) {
+                if (!chunk.trim()) continue;
+                const lines = chunk.split('\n');
+                let eventType = '';
+                let eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+
+                if (eventType === 'progress') {
+                    const { current, total: t } = JSON.parse(eventData);
+                    document.getElementById('assignProgressLabel').textContent = `${current} / ${t}`;
+                    document.getElementById('assignProgressFill').style.width = `${(current / t) * 100}%`;
+                } else if (eventType === 'result') {
+                    const { result } = JSON.parse(eventData);
+                    assignResults.push(result);
+                    // Update the issue row status
+                    const row = document.querySelector(`tr[data-issue-number="${result.issueNumber}"]`);
+                    if (row) {
+                        const statusTd = row.querySelector('.col-issue-status');
+                        if (statusTd) {
+                            if (result.assigned) {
+                                statusTd.innerHTML = `<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Assigned</span>`;
+                            } else {
+                                statusTd.innerHTML = `<span class="status-chip error"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Failed</span>`;
+                            }
+                        }
+                    }
+                } else if (eventType === 'log') {
+                    const { message } = JSON.parse(eventData);
+                    appendLog('assignLogEntries', message);
+                } else if (eventType === 'complete') {
+                    const data = JSON.parse(eventData);
+                    assignResults = data.results || assignResults;
+                } else if (eventType === 'error') {
+                    const { error } = JSON.parse(eventData);
+                    throw new Error(error);
+                }
+            }
+        }
+
+        // Finalize
+        document.getElementById('assignProgress').style.display = 'none';
+        setStep(4);
+        setStatus('Agent Assigned', '');
+        renderCompletion(assignResults);
+        showPanel('panel-complete');
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Error', 'error');
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>
+                <circle cx="12" cy="15" r="2"/>
+            </svg>
+            Assign Copilot to Selected
+            <span class="btn-badge" id="assignCount">${issueNumbers.length}</span>
+        `;
+    }
+}
+
+// ─── Render Completion ────────────────────────────────────────────────────────
+function renderCompletion(results) {
+    const assigned = results.filter(r => r.assigned).length;
+
+    document.getElementById('completeStats').innerHTML = `
+        <div class="stat-item">
+            <span class="stat-value">${gaps.filter(g => g.hasGap).length}</span>
+            <span class="stat-label">Gaps Found</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value">${createdIssues.length}</span>
+            <span class="stat-label">Issues Created</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value">${assigned}</span>
+            <span class="stat-label">Agent Assigned</span>
+        </div>
+    `;
+
+    if (createdIssues.length > 0 && createdIssues[0].url) {
+        const repoUrl = createdIssues[0].url.split('/issues/')[0] + '/issues';
+        document.getElementById('btnViewRepo').href = repoUrl;
+    }
+}
+
+// ─── Step 4: Deploy to Azure ──────────────────────────────────────────────────
+const deployStepIds = ['ds-check', 'ds-prepare', 'ds-deploy', 'ds-url', 'ds-done'];
+
+function markDeployStep(stepNum) {
+    deployStepIds.forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const icon = el.querySelector('.loading-step-icon');
+        if (i < stepNum) {
+            el.classList.add('done');
+            el.classList.remove('active');
+            icon.classList.remove('spinner');
+        } else if (i === stepNum) {
+            el.classList.add('active');
+            el.classList.remove('done');
+            icon.classList.add('spinner');
+        } else {
+            el.classList.remove('active', 'done');
+            icon.classList.remove('spinner');
+        }
+    });
+}
+
+async function deployToAzure() {
+    const fab = document.getElementById('fabDeploy');
+    fab.classList.add('deploying');
+    fab.querySelector('.fab-label').textContent = 'Deploying...';
+
+    const btn = document.getElementById('btnDeployAzure');
+    btn.disabled = true;
+    btn.innerHTML = `
+        <div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div>
+        Deploying...
+    `;
+
+    setStep(5);
+    setStatus('Deploying...', 'processing');
+    showPanel('panel-deploy');
+
+    // Reset deploy UI
+    document.getElementById('deployProgressArea').style.display = 'block';
+    document.getElementById('deployResult').style.display = 'none';
+    document.getElementById('deployLogEntries').innerHTML = '';
+    const deployIcon = document.querySelector('.deploy-success-icon');
+    if (deployIcon) deployIcon.classList.remove('deploy-failed');
+    document.getElementById('btnOpenSite').style.display = '';
+    markDeployStep(0);
+
+    try {
+        const response = await fetch('/api/deploy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to start deployment');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let deployUrl = null;
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const chunks = buffer.split('\n\n');
+            buffer = chunks.pop();
+
+            for (const chunk of chunks) {
+                if (!chunk.trim()) continue;
+                const lines = chunk.split('\n');
+                let eventType = '';
+                let eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+
+                if (eventType === 'progress') {
+                    const { step, message } = JSON.parse(eventData);
+                    markDeployStep(step);
+                    document.getElementById('deployStatus').textContent = message;
+                } else if (eventType === 'deploy-url') {
+                    const { url } = JSON.parse(eventData);
+                    deployUrl = url;
+                } else if (eventType === 'log') {
+                    const { message } = JSON.parse(eventData);
+                    appendLog('deployLogEntries', message);
+                } else if (eventType === 'complete') {
+                    const data = JSON.parse(eventData);
+                    deployUrl = data.url || deployUrl;
+                    renderDeployResult(true, deployUrl, data.message);
+                } else if (eventType === 'error') {
+                    const { error, errorType } = JSON.parse(eventData);
+                    throw Object.assign(new Error(error), { errorType });
+                }
+            }
+        }
+
+        // If no complete event was received but we got a URL
+        if (deployUrl && document.getElementById('deployResult').style.display === 'none') {
+            renderDeployResult(true, deployUrl, 'Deployment complete');
+        }
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Deploy Failed', 'error');
+        renderDeployResult(false, null, error.message, error.errorType || 'unknown');
+    } finally {
+        const btn = document.getElementById('btnDeployAzure');
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+            </svg>
+            Deploy to Azure
+        `;
+    }
+}
+
+function renderDeployResult(success, url, message, errorType) {
+    document.getElementById('deployProgressArea').style.display = 'none';
+    document.getElementById('deployResult').style.display = 'block';
+
+    // Clear any previous error guidance / retry UI
+    document.querySelectorAll('.deploy-error-guidance, .deploy-tech-details, .btn-retry').forEach(el => el.remove());
+
+    if (success) {
+        const fab = document.getElementById('fabDeploy');
+        fab.classList.remove('deploying');
+        fab.classList.add('deployed');
+        fab.querySelector('.fab-label').textContent = 'Deployed ✓';
+
+        setStatus('Deployed!', '');
+        // Mark all deploy steps done
+        deployStepIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('done');
+                el.classList.remove('active');
+                const icon = el.querySelector('.loading-step-icon');
+                if (icon) icon.classList.remove('spinner');
+            }
+        });
+
+        document.getElementById('deployMessage').textContent = message || 'Your application is live on Azure.';
+        document.getElementById('btnOpenSite').style.display = '';
+
+        // Restore success icon
+        const iconEl = document.querySelector('.deploy-success-icon');
+        iconEl.classList.remove('deploy-failed');
+        iconEl.innerHTML = `
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>`;
+        document.querySelector('.deploy-success-title').textContent = 'Deployed to Azure!';
+
+        if (url) {
+            document.getElementById('deployUrlCard').style.display = 'flex';
+            document.getElementById('deployUrlLink').href = url;
+            document.getElementById('deployUrlText').textContent = url;
+            document.getElementById('btnOpenSite').href = url;
+        }
+
+        // Final stats
+        document.getElementById('deployStats').innerHTML = `
+            <div class="stat-item">
+                <span class="stat-value">${gaps.filter(g => g.hasGap).length}</span>
+                <span class="stat-label">Gaps Found</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">${createdIssues.length}</span>
+                <span class="stat-label">Issues Created</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value">1</span>
+                <span class="stat-label">Azure Deploy</span>
+            </div>
+        `;
+
+        // Save deployed URL for validation
+        deployedUrl = url || '';
+
+        // Show validate button if we have requirements
+        if (requirements.length > 0) {
+            const actions = document.querySelector('#deployResult .complete-actions');
+            if (actions) {
+                const validateBtn = document.createElement('button');
+                validateBtn.className = 'btn btn-primary btn-xl';
+                validateBtn.onclick = startValidation;
+                validateBtn.innerHTML = `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                        <rect x="9" y="3" width="6" height="4" rx="1"/>
+                        <path d="m9 14 2 2 4-4"/>
+                    </svg>
+                    Validate Against Requirements
+                `;
+                // Insert before first button
+                const firstBtn = actions.firstElementChild;
+                if (firstBtn) actions.insertBefore(validateBtn, firstBtn);
+                else actions.appendChild(validateBtn);
+            }
+        }
+    } else {
+        const fab = document.getElementById('fabDeploy');
+        fab.classList.remove('deploying', 'deployed');
+        fab.querySelector('.fab-label').textContent = 'Deploy';
+
+        // Error state — classify and show guidance
+        const type = errorType || 'unknown';
+        const iconEl = document.querySelector('.deploy-success-icon');
+        iconEl.classList.add('deploy-failed');
+        iconEl.innerHTML = `
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M15 9l-6 6"/><path d="M9 9l6 6"/>
+            </svg>`;
+        document.getElementById('deployUrlCard').style.display = 'none';
+        document.getElementById('btnOpenSite').style.display = 'none';
+        document.getElementById('deployStats').innerHTML = '';
+
+        // Build error-specific guidance card
+        let guidanceTitle = 'Deployment encountered an error';
+        let guidanceBody = '';
+        let guidanceClass = type;
+
+        if (type === 'auth') {
+            guidanceTitle = 'Azure needs you to sign in';
+            guidanceBody = `
+                <p>Your Azure authentication has expired or is missing.</p>
+                <a class="btn btn-primary btn-xl" href="#" onclick="event.preventDefault(); navigator.clipboard.writeText('azd auth login'); showToast('Copied command — run it in your terminal', 'success');">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    Sign in to Azure
+                </a>
+                <p>Run <code>azd auth login</code> in your terminal, then click Retry to continue deployment.</p>
+            `;
+        } else if (type === 'timeout') {
+            guidanceTitle = 'Deployment is taking longer than expected';
+            guidanceClass = 'timeout';
+            guidanceBody = `
+                <p>The deployment timed out, but Azure may still be processing it.</p>
+                <p>You can retry now or check the Azure Portal for status.</p>
+            `;
+        } else if (type === 'subscription') {
+            guidanceTitle = 'Azure subscription issue';
+            guidanceClass = 'unknown';
+            guidanceBody = `
+                <p>There was a problem with your Azure subscription. Please check that a valid subscription is selected.</p>
+                <p>Run <code>az account show</code> to verify your current subscription.</p>
+            `;
+        } else {
+            guidanceBody = `<p>Something went wrong during deployment. You can retry or check the logs below for details.</p>`;
+        }
+
+        document.querySelector('.deploy-success-title').textContent = guidanceTitle;
+        document.getElementById('deployMessage').textContent = '';
+
+        // Inject guidance card after the subtitle
+        const subtitleEl = document.getElementById('deployMessage');
+
+        const guidanceCard = document.createElement('div');
+        guidanceCard.className = `deploy-error-guidance ${guidanceClass}`;
+        guidanceCard.innerHTML = guidanceBody;
+        subtitleEl.after(guidanceCard);
+
+        // Retry button
+        const retryBtn = document.createElement('button');
+        retryBtn.className = 'btn btn-primary btn-xl btn-retry';
+        retryBtn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            Retry Deploy
+        `;
+        retryBtn.onclick = () => deployToAzure();
+        guidanceCard.after(retryBtn);
+
+        // Technical details collapsible
+        const techDetails = document.createElement('details');
+        techDetails.className = 'deploy-tech-details';
+        techDetails.innerHTML = `
+            <summary>Show technical details</summary>
+            <pre>${escapeHtml(message || 'No additional details available.')}</pre>
+        `;
+        retryBtn.after(techDetails);
+    }
+}
+
+// ─── Step 6: Validate Against Requirements ────────────────────────────────────
+async function startValidation() {
+    if (!deployedUrl) {
+        showToast('No deployment URL available. Deploy first.');
+        return;
+    }
+
+    setStep(6);
+    setStatus('Validating...', 'processing');
+    showPanel('panel-validate');
+
+    // Reset validation UI
+    document.getElementById('validateProgressArea').style.display = 'block';
+    document.getElementById('validateResult').style.display = 'none';
+    document.getElementById('validateProgressFill').style.width = '0%';
+    document.getElementById('validateLogEntries').innerHTML = '';
+    document.getElementById('validateTableBody').innerHTML = '';
+    validationResults = [];
+
+    try {
+        const response = await fetch('/api/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: deployedUrl }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Failed to start validation');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const chunks = buffer.split('\n\n');
+            buffer = chunks.pop();
+
+            for (const chunk of chunks) {
+                if (!chunk.trim()) continue;
+                const lines = chunk.split('\n');
+                let eventType = '';
+                let eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+
+                if (eventType === 'progress') {
+                    const { current, total, message } = JSON.parse(eventData);
+                    document.getElementById('validateStatus').textContent = message;
+                    if (total > 0) {
+                        document.getElementById('validateProgressFill').style.width = `${(current / total) * 100}%`;
+                    }
+                } else if (eventType === 'result') {
+                    const { result } = JSON.parse(eventData);
+                    validationResults.push(result);
+                    appendValidationRow(result);
+                } else if (eventType === 'log') {
+                    const { message } = JSON.parse(eventData);
+                    appendLog('validateLogEntries', message);
+                } else if (eventType === 'complete') {
+                    const data = JSON.parse(eventData);
+                    renderValidationComplete(data);
+                } else if (eventType === 'error') {
+                    const { error } = JSON.parse(eventData);
+                    throw new Error(error);
+                }
+            }
+        }
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Validation Failed', 'error');
+        document.getElementById('validateProgressArea').style.display = 'none';
+        document.getElementById('validateResult').style.display = 'block';
+        document.getElementById('validateSummary').innerHTML = `
+            <div class="deploy-success-icon deploy-failed" style="width:80px;height:80px;">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/>
+                </svg>
+            </div>
+            <h2 class="deploy-success-title" style="font-size:1.5rem;">Validation Failed</h2>
+            <p style="color: var(--text-secondary);">${escapeHtml(error.message)}</p>
+        `;
+    }
+}
+
+function appendValidationRow(result) {
+    const tbody = document.getElementById('validateTableBody');
+    const tr = document.createElement('tr');
+    tr.className = result.passed ? 'validation-pass' : 'validation-fail';
+    tr.innerHTML = `
+        <td style="text-align:center;">
+            ${result.passed
+                ? '<span class="status-chip no-gap" style="padding:4px 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></span>'
+                : '<span class="status-chip failed" style="padding:4px 8px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>'
+            }
+        </td>
+        <td><div class="td-requirement">${escapeHtml(result.requirement)}</div></td>
+        <td><span class="text-muted" style="font-size:0.85rem;">${escapeHtml(result.details)}</span></td>
+    `;
+    tbody.appendChild(tr);
+}
+
+function renderValidationComplete(data) {
+    document.getElementById('validateProgressArea').style.display = 'none';
+    document.getElementById('validateResult').style.display = 'block';
+
+    const passRate = data.total > 0 ? Math.round((data.passed / data.total) * 100) : 0;
+    const passColor = passRate >= 80 ? 'var(--accent-emerald)' : passRate >= 50 ? '#f59e0b' : '#ef4444';
+
+    document.getElementById('validateSummary').innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:var(--space-md);margin-bottom:var(--space-xl);">
+            <div style="width:100px;height:100px;border-radius:50%;border:3px solid ${passColor};display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:800;color:${passColor};">
+                ${passRate}%
+            </div>
+            <h2 style="font-size:1.5rem;font-weight:700;">${data.passed} of ${data.total} Requirements Validated</h2>
+            <p style="color:var(--text-secondary);">
+                ${data.failed > 0 ? `${data.failed} requirement${data.failed > 1 ? 's' : ''} did not pass validation.` : 'All requirements pass!'}
+            </p>
+        </div>
+    `;
+
+    if (data.failed > 0) {
+        document.getElementById('btnCreateValidationIssues').style.display = '';
+        setStatus(`${data.passed}/${data.total} Validated`, 'warning');
+    } else {
+        document.getElementById('btnCreateValidationIssues').style.display = 'none';
+        setStatus(`${data.total}/${data.total} Validated`, '');
+    }
+}
+
+async function createValidationIssues() {
+    const failures = validationResults.filter(r => !r.passed);
+    if (failures.length === 0) return;
+    showToast(`Would create ${failures.length} issue(s) for failed validations. (Coming soon)`, 'info');
+}
+
+// ─── Reset ────────────────────────────────────────────────────────────────────
+function resetApp() {
+    gaps = [];
+    requirements = [];
+    createdIssues = [];
+    currentStep = 1;
+    analysisComplete = false;
+    deployedUrl = '';
+    validationResults = [];
+    setStep(1);
+    setStatus('Ready', '');
+    showPanel('panel-analyze');
+    document.getElementById('btnAnalyze').disabled = false;
+
+    const fab = document.getElementById('fabDeploy');
+    if (fab) {
+        fab.classList.remove('deploying', 'deployed');
+        fab.querySelector('.fab-label').textContent = 'Deploy';
+    }
+}
+
+// ─── Step Navigation ──────────────────────────────────────────────────────────
+function navigateToStep(stepNum) {
+    const stepEl = document.querySelector(`.step[data-step="${stepNum}"]`);
+    if (!stepEl) return;
+    // Only allow navigation to completed steps or the current active step
+    if (!stepEl.classList.contains('completed') && !stepEl.classList.contains('active')) return;
+
+    // Map step numbers to panels
+    switch (stepNum) {
+        case 1:
+            showPanel(requirements.length > 0 ? 'panel-loading' : 'panel-analyze');
+            setStatus('Upload & Analyze', '');
+            break;
+        case 2:
+            showPanel('panel-loading');
+            setStatus('Requirements & Gaps', '');
+            break;
+        case 3:
+            showPanel('panel-issues');
+            setStatus('GitHub Issues', '');
+            break;
+        case 4:
+            showPanel('panel-complete');
+            setStatus('Complete', 'success');
+            break;
+        case 5:
+            showPanel('panel-deploy');
+            setStatus('Deploy', '');
+            break;
+        case 6:
+            showPanel('panel-validate');
+            setStatus('Validate', '');
+            break;
+    }
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    setStep(1);
+    showPanel('panel-analyze');
+
+    // Show deploy FAB
+    document.getElementById('fabDeploy').classList.add('visible');
+
+    // Make completed steps clickable for navigation
+    document.querySelectorAll('.step').forEach(stepEl => {
+        stepEl.addEventListener('click', () => {
+            const stepNum = parseInt(stepEl.dataset.step);
+            navigateToStep(stepNum);
+        });
+    });
+});

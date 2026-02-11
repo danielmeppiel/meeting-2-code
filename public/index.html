@@ -31,6 +31,7 @@
             </div>
             <div class="header-center">
                 <div class="stepper" id="stepper">
+                    <!-- Shared steps -->
                     <div class="step active" data-step="1">
                         <div class="step-indicator">
                             <span class="step-number">1</span>
@@ -46,21 +47,40 @@
                         </div>
                         <span class="step-label">Review Gaps</span>
                     </div>
-                    <div class="step-connector"></div>
-                    <div class="step" data-step="3">
-                        <div class="step-indicator">
-                            <span class="step-number">3</span>
-                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+
+                    <!-- Fork: two parallel tracks -->
+                    <div class="stepper-fork">
+                        <div class="fork-connector"></div>
+                        <div class="fork-tracks">
+                            <!-- Build track -->
+                            <div class="fork-track track-build active" id="trackBuild">
+                                <span class="track-tag">BUILD</span>
+                                <div class="step" data-step="3">
+                                    <div class="step-indicator">
+                                        <span class="step-number">3</span>
+                                        <svg class="step-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                                    </div>
+                                    <span class="step-label">Dispatch</span>
+                                </div>
+                            </div>
+                            <!-- QA track -->
+                            <div class="fork-track track-qa" id="trackQA">
+                                <span class="track-tag">QA</span>
+                                <div class="step" data-step="qa-deploy">
+                                    <div class="step-indicator step-indicator--qa">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                                    </div>
+                                    <span class="step-label">Deploy</span>
+                                </div>
+                                <div class="step-connector"></div>
+                                <div class="step" data-step="qa-validate">
+                                    <div class="step-indicator step-indicator--qa">
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                                    </div>
+                                    <span class="step-label">Validate</span>
+                                </div>
+                            </div>
                         </div>
-                        <span class="step-label">Create Issues</span>
-                    </div>
-                    <div class="step-connector"></div>
-                    <div class="step" data-step="4">
-                        <div class="step-indicator">
-                            <span class="step-number">4</span>
-                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        </div>
-                        <span class="step-label">Deploy Agent</span>
                     </div>
                 </div>
             </div>
@@ -80,12 +100,11 @@
                 <div class="hero-section">
                     <div class="hero-badge">Contoso Industries Redesign</div>
                     <h1 class="hero-title">
-                        Ship Features in Hours, Not Sprints<br>
-                        <span class="gradient-text">AI-Powered Development</span>
+                        From Meeting to Shipped Code<br>
+                        <span class="gradient-text">The Agentic SDLC</span>
                     </h1>
                     <p class="hero-subtitle">
-                        Automatically extract requirements from your latest meeting, 
-                        analyze gaps in the current codebase, and generate implementation tasks — all powered by AI agents.
+                        WorkIQ extracts requirements from your meetings. GitHub Copilot agents write the code. Azure deploys it — automatically. The entire software development lifecycle, powered by agents.
                     </p>
                     <button class="btn btn-primary btn-xl" id="btnAnalyze" onclick="startAnalysis()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -96,15 +115,15 @@
                     <div class="hero-features">
                         <div class="feature-chip">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                            WorkIQ Meeting Extraction
+                            WorkIQ Extraction
                         </div>
                         <div class="feature-chip">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6"/><path d="M8 6l-6 6 6 6"/></svg>
-                            Codebase Gap Analysis
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/></svg>
+                            GitHub Copilot Agents
                         </div>
                         <div class="feature-chip">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-                            Complexity Estimation
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                            Azure Deploy
                         </div>
                     </div>
                 </div>
@@ -197,9 +216,12 @@
                                     Analyze Gaps for Selected
                                     <span class="btn-badge" id="analyzeCount">0</span>
                                 </button>
-                                <button class="btn btn-primary" id="btnCreateIssues" onclick="createIssues()" style="display:none;" disabled>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
-                                    Create Issues for Selected
+                                <button class="btn btn-primary" id="btnCreateIssues" onclick="dispatchSelected()" style="display:none;" disabled>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>
+                                        <circle cx="12" cy="15" r="2"/>
+                                    </svg>
+                                    Dispatch Selected
                                     <span class="btn-badge" id="selectedCount">0</span>
                                 </button>
                             </div>
@@ -217,10 +239,8 @@
                                         </th>
                                         <th class="col-req">Requirement</th>
                                         <th class="col-status">Status</th>
-                                        <th class="col-current">Current State</th>
-                                        <th class="col-gap">Gap</th>
                                         <th class="col-complexity">Complexity</th>
-                                        <th class="col-effort">Est. Effort</th>
+                                        <th class="col-agent-type" style="display:none;" id="colAgentHeader">Agent</th>
                                     </tr>
                                 </thead>
                                 <tbody id="unifiedTableBody"></tbody>
@@ -272,7 +292,7 @@
                                 <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>
                                 <circle cx="12" cy="15" r="2"/>
                             </svg>
-                            Assign Copilot to Selected
+                            Dispatch Selected
                             <span class="btn-badge" id="assignCount">0</span>
                         </button>
                     </div>
@@ -310,6 +330,7 @@
                                 </th>
                                 <th class="col-issue-num">Issue #</th>
                                 <th class="col-req">Title</th>
+                                <th class="col-agent-type">Agent</th>
                                 <th class="col-issue-status">Status</th>
                             </tr>
                         </thead>
@@ -347,7 +368,87 @@
                 </div>
             </section>
 
+            <!-- QA Mode: Unified table-first workflow -->
+            <section class="panel" id="panel-qa">
+                <div class="qa-unified">
+                    <!-- Header bar -->
+                    <div class="qa-unified-header">
+                        <div class="qa-unified-header-left">
+                            <h2 class="panel-title">Requirements &amp; Gaps</h2>
+                            <p class="panel-subtitle" id="qaGapSummary">
+                                <span id="qaReqTotal">0</span> requirements
+                            </p>
+                        </div>
+                        <div class="qa-unified-header-right">
+                            <!-- Deployed URL (shown after deploy) -->
+                            <div class="qa-deploy-url-bar" id="qaDeployUrlBar" style="display:none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-emerald)" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+                                <a id="qaDeployUrlLink" href="#" target="_blank" class="deploy-url-inline">—</a>
+                            </div>
+
+                            <!-- Single workflow button -->
+                            <button class="btn btn-primary btn-lg" id="btnLaunchQA" onclick="launchQAWorkflow()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
+                                </svg>
+                                Ship &amp; Validate
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Workflow progress bar (hidden until launched) -->
+                    <div class="qa-workflow-progress" id="qaWorkflowProgress" style="display:none;">
+                        <div class="qa-workflow-steps">
+                            <div class="qa-wf-step" id="qaWfDeploy">
+                                <div class="qa-wf-step-icon">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                                </div>
+                                <span>Deploying</span>
+                            </div>
+                            <div class="qa-wf-connector"></div>
+                            <div class="qa-wf-step" id="qaWfValidate">
+                                <div class="qa-wf-step-icon">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                                </div>
+                                <span>Validating</span>
+                            </div>
+                        </div>
+                        <details class="qa-workflow-log-details">
+                            <summary>Agent activity</summary>
+                            <div class="agent-log agent-log-compact" style="margin-top: var(--space-sm); max-height: 160px;">
+                                <div class="agent-log-entries" id="qaWorkflowLogEntries"></div>
+                            </div>
+                        </details>
+                    </div>
+
+                    <!-- Full requirements table -->
+                    <div class="table-container qa-table-container-full">
+                        <table class="gap-table" id="qaGapTable">
+                            <thead>
+                                <tr>
+                                    <th class="col-req">Requirement</th>
+                                    <th style="width:100px;">Status</th>
+                                    <th style="width:90px;">Complexity</th>
+                                </tr>
+                            </thead>
+                            <tbody id="qaGapTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
         </main>
+
+        <!-- Mode Toggle Switch -->
+        <div class="mode-switch-container" id="fabQA">
+            <div class="mode-switch">
+                <span class="mode-switch-label mode-switch-label--build active">Build</span>
+                <button class="mode-switch-track" onclick="toggleQAMode()" title="Switch between Build and QA modes">
+                    <span class="mode-switch-thumb"></span>
+                </button>
+                <span class="mode-switch-label mode-switch-label--qa">QA</span>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

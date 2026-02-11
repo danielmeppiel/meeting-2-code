@@ -145,11 +145,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-md) var(--space-2xl);
+    padding: var(--space-sm) var(--space-2xl);
     background: rgba(9, 9, 11, 0.8);
     backdrop-filter: blur(20px) saturate(180%);
     border-bottom: 1px solid var(--border-subtle);
-    height: 60px;
+    min-height: 64px;
 }
 
 .header-left, .header-right {
@@ -255,6 +255,155 @@ body {
     height: 2px;
     background: var(--border-subtle);
     margin: 0 var(--space-sm);
+}
+
+/* ─── Forked Stepper ───────────────────────────────────────────────────────── */
+.stepper-fork {
+    display: flex;
+    align-items: center;
+}
+
+.fork-connector {
+    width: 20px;
+    height: 40px;
+    position: relative;
+    margin: 0 2px 0 var(--space-sm);
+}
+
+/* Vertical stem of the fork */
+.fork-connector::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: calc(50% - 12px);
+    width: 2px;
+    height: 24px;
+    background: var(--border-subtle);
+}
+
+/* Top branch line */
+.fork-connector::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: calc(50% - 12px);
+    width: 100%;
+    height: 2px;
+    background: var(--border-subtle);
+}
+
+/* Bottom branch line — drawn via box-shadow on the vertical stem */
+.fork-connector::before {
+    box-shadow: 0 22px 0 0 var(--border-subtle);
+    clip-path: inset(-2px -20px -2px 0);
+}
+
+.fork-tracks {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+}
+
+/* Bottom branch horizontal line */
+.fork-tracks::before {
+    content: '';
+    position: absolute;
+    left: -20px;
+    bottom: calc(50% - 7px);
+    width: 20px;
+    height: 2px;
+    background: var(--border-subtle);
+}
+
+.fork-track {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    opacity: 0.28;
+    transition: opacity 0.3s var(--ease-out);
+    padding: 2px 0;
+}
+
+.fork-track.active {
+    opacity: 1;
+}
+
+.fork-track .step-indicator {
+    width: 22px;
+    height: 22px;
+}
+
+.fork-track .step-number {
+    font-size: 0.6rem;
+}
+
+.fork-track .step-label {
+    font-size: 0.7rem;
+}
+
+.fork-track .step-connector {
+    width: 24px;
+}
+
+/* Track tags (BUILD / QA) */
+.track-tag {
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    min-width: 32px;
+    margin-right: 4px;
+    opacity: 0.7;
+}
+
+.fork-track.active .track-tag {
+    opacity: 1;
+}
+
+.track-build.active .track-tag {
+    color: var(--accent-blue);
+}
+
+.track-qa.active .track-tag {
+    color: var(--accent-emerald);
+}
+
+/* QA step indicators use icons instead of numbers */
+.step-indicator--qa {
+    width: 22px;
+    height: 22px;
+    border-radius: var(--radius-full);
+    background: var(--bg-tertiary);
+    border: 2px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--duration-normal) var(--ease-out);
+}
+
+.step-indicator--qa svg {
+    color: var(--text-tertiary);
+}
+
+.fork-track.active .step.active .step-indicator--qa {
+    background: var(--accent-emerald);
+    border-color: var(--accent-emerald);
+    box-shadow: 0 0 12px rgba(52, 211, 153, 0.3);
+}
+
+.fork-track.active .step.active .step-indicator--qa svg {
+    color: white;
+}
+
+.fork-track.active .step.completed .step-indicator--qa {
+    background: var(--accent-emerald);
+    border-color: var(--accent-emerald);
+}
+
+.fork-track.active .step.completed .step-indicator--qa svg {
+    color: white;
 }
 
 /* ─── Status Badge ─────────────────────────────────────────────────────────── */
@@ -862,12 +1011,87 @@ body {
 }
 
 .col-check { width: 48px; text-align: center; }
-.col-req { width: 22%; }
-.col-status { width: 100px; text-align: center; }
-.col-current { width: 20%; }
-.col-gap { width: 20%; }
+.col-req { width: auto; }
+.col-status { width: 110px; text-align: center; }
 .col-complexity { width: 100px; text-align: center; }
-.col-effort { width: 110px; }
+
+/* ─── Expandable Detail Rows ───────────────────────────────────────────────── */
+.row-details-expandable {
+    display: none;
+    background: var(--bg-tertiary);
+}
+
+.row-details-expandable.show {
+    display: table-row;
+}
+
+.row-details-expandable td {
+    padding: 0 16px 12px 16px;
+    border-top: none !important;
+}
+
+.detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 120px;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+    margin-top: 0;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.detail-item-full {
+    grid-column: 1 / -1;
+}
+
+.detail-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+}
+
+.detail-value {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.expandable-req {
+    cursor: pointer;
+    position: relative;
+    padding-right: 20px !important;
+}
+
+.expandable-req::after {
+    content: '';
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid var(--text-tertiary);
+    transition: transform var(--duration-fast);
+}
+
+.expandable-req.expanded::after {
+    transform: translateY(-50%) rotate(180deg);
+}
+
+.no-gap-detail {
+    opacity: 0.5;
+}
 
 /* ─── Status Chips ─────────────────────────────────────────────────────────── */
 .status-chip {
@@ -1163,6 +1387,37 @@ body {
 .col-issue-num {
     width: 90px;
     white-space: nowrap;
+}
+
+.col-agent-type {
+    width: 110px;
+    text-align: center;
+}
+
+.agent-type-select {
+    appearance: none;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    padding: 4px 24px 4px 8px;
+    cursor: pointer;
+    transition: border-color var(--duration-fast), box-shadow var(--duration-fast);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+}
+
+.agent-type-select:hover {
+    border-color: var(--accent-blue);
+}
+
+.agent-type-select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
 }
 
 .col-issue-status {
@@ -1613,4 +1868,205 @@ body {
         flex-wrap: wrap;
         justify-content: center;
     }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   QA MODE — Ship & Validate
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Mode Switch Toggle */
+.mode-switch-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 200;
+    display: none;
+    animation: fadeInUp 0.3s ease;
+}
+.mode-switch-container.visible {
+    display: block;
+}
+.mode-switch {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border, #333);
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.mode-switch-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted, #666);
+    transition: color 0.2s;
+}
+.mode-switch-label.active {
+    color: var(--text, #fff);
+}
+.mode-switch-track {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    background: var(--bg-hover, #2a2a3a);
+    border: 1px solid var(--border, #333);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.2s;
+    padding: 0;
+}
+.mode-switch-container.active .mode-switch-track {
+    background: var(--accent-emerald, #34d399);
+    border-color: var(--accent-emerald, #34d399);
+}
+.mode-switch-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+}
+.mode-switch-container.active .mode-switch-thumb {
+    transform: translateX(20px);
+}
+
+/* QA Unified Panel */
+.qa-unified {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg, 1.5rem);
+}
+.qa-unified-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.qa-unified-header-left {
+    flex: 1;
+    min-width: 0;
+}
+.qa-unified-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+.qa-deploy-url-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(52, 211, 153, 0.08);
+    border: 1px solid rgba(52, 211, 153, 0.25);
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.82rem;
+}
+.deploy-url-inline {
+    color: var(--accent-emerald, #34d399);
+    text-decoration: none;
+    font-weight: 500;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+}
+.deploy-url-inline:hover {
+    text-decoration: underline;
+}
+.qa-table-container-full {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* QA Workflow Progress */
+.qa-workflow-progress {
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border, #333);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+}
+.qa-workflow-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 0.5rem;
+}
+.qa-wf-step {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-muted, #666);
+    transition: color 0.3s;
+}
+.qa-wf-step.active {
+    color: var(--accent-blue, #60a5fa);
+}
+.qa-wf-step.done {
+    color: var(--accent-emerald, #34d399);
+}
+.qa-wf-step.failed {
+    color: var(--accent-red, #f87171);
+}
+.qa-wf-step-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bg-hover, #2a2a3a);
+    transition: background 0.3s;
+}
+.qa-wf-step.active .qa-wf-step-icon {
+    background: rgba(96, 165, 250, 0.15);
+}
+.qa-wf-step.done .qa-wf-step-icon {
+    background: rgba(52, 211, 153, 0.15);
+}
+.qa-wf-step.failed .qa-wf-step-icon {
+    background: rgba(248, 113, 113, 0.15);
+}
+.qa-wf-connector {
+    flex: 0 0 40px;
+    height: 2px;
+    background: var(--border, #333);
+    margin: 0 0.5rem;
+}
+.qa-workflow-log-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--text-muted, #666);
+    user-select: none;
+}
+.agent-log-compact {
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+/* Validation row highlights */
+.validation-pass-row {
+    background: rgba(52, 211, 153, 0.04);
+}
+.validation-fail-row {
+    background: rgba(248, 113, 113, 0.04);
+}
+.status-chip.gap-found {
+    background: rgba(248, 113, 113, 0.12);
+    color: #f87171;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
 }

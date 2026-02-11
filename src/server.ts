@@ -8,6 +8,9 @@ import type { GapItem, MeetingInfo } from "./agents/gap-analyzer.js";
 import { createEpicIssue, linkSubIssuesToEpic } from "./agents/epic-issue.js";
 import { createGithubIssues } from "./agents/github-issues.js";
 import { assignCodingAgent } from "./agents/coding-agent.js";
+import { deployToAzure } from "./agents/azure-deployer.js";
+import { validateDeployment } from "./agents/playwright-validator.js";
+import { executeLocalAgent } from "./agents/local-agent.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -222,6 +225,123 @@ app.post("/api/assign-coding-agent", async (req, res) => {
 // Health check
 app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", state: client.getState() });
+});
+
+// Step 4a: Deploy to Azure (SSE streaming)
+app.post("/api/deploy", async (_req, res) => {
+    const sendEvent = sseHeaders(res);
+
+    try {
+        const result = await deployToAzure({
+            onProgress: (step, message) => sendEvent("progress", { step, message }),
+            onLog: (message) => sendEvent("log", { message }),
+        });
+
+        if (result.success) {
+            if (result.url) {
+                sendEvent("deploy-url", { url: result.url });
+            }
+            sendEvent("complete", { success: true, url: result.url, message: result.message });
+        } else {
+            sendEvent("error", {
+                success: false,
+                error: result.message,
+                errorType: result.errorType,
+            });
+        }
+    } catch (error) {
+        console.error("Deploy error:", error);
+        sendEvent("error", {
+            success: false,
+            error: error instanceof Error ? error.message : "Deployment failed",
+        });
+    } finally {
+        res.end();
+    }
+});
+
+// Step 4b: Validate deployment against requirements (SSE streaming)
+app.post("/api/validate", async (req, res) => {
+    const { url } = req.body as { url: string };
+
+    if (!url) {
+        return res.status(400).json({ success: false, error: "No URL provided" });
+    }
+
+    if (lastRequirements.length === 0) {
+        return res.status(400).json({ success: false, error: "No requirements extracted yet" });
+    }
+
+    const sendEvent = sseHeaders(res);
+
+    try {
+        const results = await validateDeployment({
+            url,
+            requirements: lastRequirements,
+            onProgress: (current, total, message) => sendEvent("progress", { current, total, message }),
+            onResult: (result) => sendEvent("result", { result }),
+            onLog: (message) => sendEvent("log", { message }),
+        });
+
+        const passed = results.filter((r) => r.passed).length;
+        const failed = results.length - passed;
+        sendEvent("complete", { success: true, total: results.length, passed, failed });
+    } catch (error) {
+        console.error("Validate error:", error);
+        sendEvent("error", {
+            success: false,
+            error: error instanceof Error ? error.message : "Validation failed",
+        });
+    } finally {
+        res.end();
+    }
+});
+
+// Step 3b: Execute local Copilot agent for selected gaps (SSE streaming)
+app.post("/api/execute-local-agent", async (req, res) => {
+    const { gapIds } = req.body as { gapIds: number[] };
+
+    if (!gapIds?.length) {
+        return res.status(400).json({ success: false, error: "No gaps provided" });
+    }
+
+    const selectedGaps = lastAnalysis
+        .filter((g) => gapIds.includes(g.id))
+        .map((g) => ({
+            id: g.id,
+            requirement: g.requirement,
+            gap: g.gap,
+            details: g.details,
+            complexity: g.complexity,
+        }));
+
+    if (selectedGaps.length === 0) {
+        return res.status(400).json({ success: false, error: "No matching gaps found" });
+    }
+
+    const sendEvent = sseHeaders(res);
+
+    try {
+        const results = await executeLocalAgent(client, {
+            gaps: selectedGaps,
+            githubMcp: getGitHubMcpConfig(),
+            onItemStart: (id, requirement) => sendEvent("item-start", { id, requirement }),
+            onItemProgress: (id, message) => sendEvent("item-progress", { id, message }),
+            onItemComplete: (id, success, summary) => sendEvent("item-complete", { id, success, summary }),
+            onLog: (message) => sendEvent("log", { message }),
+        });
+
+        const successCount = results.filter((r) => r.success).length;
+        sendEvent("complete", { success: true, total: results.length, succeeded: successCount, results });
+    } catch (error) {
+        console.error("Local agent error:", error);
+        sendEvent("error", {
+            success: false,
+            error: error instanceof Error ? error.message : "Local agent execution failed",
+        });
+    } finally {
+        res.end();
+    }
 });
 
 // ─── Start server ─────────────────────────────────────────────────────────────

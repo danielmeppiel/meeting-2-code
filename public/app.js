@@ -11,6 +11,10 @@ let analysisComplete = false;
 let analysisPhase = 'idle'; // 'idle' | 'extracting' | 'selecting' | 'analyzing' | 'reviewed'
 let epicIssueNumber = 0;
 let epicIssueUrl = '';
+let deployedUrl = '';
+let validationResults = [];
+let qaMode = false;
+let previousPanel = 'panel-analyze';
 
 // ─── Panel Management ─────────────────────────────────────────────────────────
 function showPanel(panelId) {
@@ -22,16 +26,39 @@ function showPanel(panelId) {
         panel.offsetHeight;
         panel.style.animation = '';
     }
+    if (panelId !== 'panel-qa') {
+        previousPanel = panelId;
+    }
 }
 
 function setStep(step) {
     currentStep = step;
-    document.querySelectorAll('.step').forEach(s => {
+    // Update shared steps (1,2) and build-track steps (3,4)
+    document.querySelectorAll('.stepper > .step, #trackBuild .step').forEach(s => {
         const stepNum = parseInt(s.dataset.step);
+        if (isNaN(stepNum)) return;
         s.classList.remove('active', 'completed');
         if (stepNum < step) s.classList.add('completed');
         else if (stepNum === step) s.classList.add('active');
     });
+}
+
+function setQAStep(phase) {
+    // phase: null | 'deploy' | 'validate' | 'complete'
+    const deployStep = document.querySelector('[data-step="qa-deploy"]');
+    const validateStep = document.querySelector('[data-step="qa-validate"]');
+    if (!deployStep || !validateStep) return;
+    deployStep.classList.remove('active', 'completed');
+    validateStep.classList.remove('active', 'completed');
+    if (phase === 'deploy') {
+        deployStep.classList.add('active');
+    } else if (phase === 'validate') {
+        deployStep.classList.add('completed');
+        validateStep.classList.add('active');
+    } else if (phase === 'complete') {
+        deployStep.classList.add('completed');
+        validateStep.classList.add('completed');
+    }
 }
 
 function setStatus(text, type = '') {
@@ -226,6 +253,7 @@ async function startAnalysis() {
                 const data = JSON.parse(e.data);
                 requirements = data.requirements;
                 console.log(`[Requirements] ${requirements.length} items`);
+                updateQAFabVisibility();
                 // Hide meeting card, show table with checkboxes
                 document.getElementById('meetingCard').style.display = 'none';
                 renderRequirementsForSelection(requirements);
@@ -319,12 +347,37 @@ function renderRequirementsForSelection(reqs) {
             <td class="col-status">
                 <span class="status-chip pending">Pending</span>
             </td>
-            <td class="col-current"><span class="cell-pending">—</span></td>
-            <td class="col-gap"><span class="cell-pending">—</span></td>
             <td class="col-complexity"><span class="cell-pending">—</span></td>
-            <td class="col-effort"><span class="cell-pending">—</span></td>
+            <td class="col-agent-type" style="display:none;"><span class="cell-pending">—</span></td>
+        `;
+        // Create hidden expandable detail row
+        const detailTr = document.createElement('tr');
+        detailTr.id = `unified-detail-${i}`;
+        detailTr.className = 'row-details-expandable';
+        detailTr.innerHTML = `
+            <td colspan="5">
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span class="detail-label">Current State</span>
+                        <span class="detail-value" data-field="currentState">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Gap</span>
+                        <span class="detail-value" data-field="gap">—</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="detail-label">Est. Effort</span>
+                        <span class="detail-value" data-field="effort">—</span>
+                    </div>
+                    <div class="detail-item detail-item-full" style="display:none;">
+                        <span class="detail-label">Implementation Details</span>
+                        <span class="detail-value" data-field="details"></span>
+                    </div>
+                </div>
+            </td>
         `;
         tbody.appendChild(tr);
+        tbody.appendChild(detailTr);
     });
 
     // Show checkboxes + analyze button immediately
@@ -428,6 +481,8 @@ async function startGapAnalysis() {
                     gapAnalyzedCount++;
                     enrichRowWithGap(gap);
                     document.getElementById('gapAnalyzedCount').textContent = gapAnalyzedCount;
+                    // Update QA table in real-time if QA panel is open
+                    if (qaMode) { try { buildQAGapTable(); } catch(_){} }
                 } else if (eventType === 'log') {
                     const { message } = JSON.parse(eventData);
                     appendLog('agentLogEntries', message);
@@ -513,33 +568,49 @@ function enrichRowWithGap(gap) {
 
     const cells = targetRow.querySelectorAll('td');
     const noGap = !gap.hasGap;
+    const rowIdx = targetRow.dataset.index;
+    const detailRow = document.getElementById(`unified-detail-${rowIdx}`);
 
     if (noGap) {
         // Mark as "No Gap" — requirement already met
         cells[2].innerHTML = `<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> No Gap</span>`;
-        cells[3].innerHTML = `<span class="text-muted">${escapeHtml(gap.currentState)}</span>`;
-        cells[4].innerHTML = `<span class="text-muted">${escapeHtml(gap.gap)}</span>`;
-        cells[5].innerHTML = `<span class="text-muted">—</span>`;
-        cells[5].style.textAlign = 'center';
-        cells[6].innerHTML = `<span class="text-muted">—</span>`;
+        cells[3].innerHTML = `<span class="text-muted">—</span>`;
+        cells[3].style.textAlign = 'center';
+        cells[4].style.display = 'none';
         targetRow.classList.add('no-gap-row');
     } else {
         cells[2].innerHTML = `<span class="status-chip analyzed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Gap Found</span>`;
-        cells[3].innerHTML = escapeHtml(gap.currentState);
-        cells[4].innerHTML = escapeHtml(gap.gap);
-        cells[5].innerHTML = `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${gap.complexity}</span>`;
-        cells[5].style.textAlign = 'center';
-        cells[6].textContent = gap.estimatedEffort;
+        cells[3].innerHTML = `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${gap.complexity}</span>`;
+        cells[3].style.textAlign = 'center';
+    }
+
+    // Populate expandable detail row
+    if (detailRow) {
+        const csVal = detailRow.querySelector('[data-field="currentState"]');
+        const gapVal = detailRow.querySelector('[data-field="gap"]');
+        const effVal = detailRow.querySelector('[data-field="effort"]');
+        const detVal = detailRow.querySelector('[data-field="details"]');
+        if (csVal) csVal.innerHTML = escapeHtml(gap.currentState) || '—';
+        if (gapVal) gapVal.innerHTML = escapeHtml(gap.gap) || '—';
+        if (effVal) effVal.textContent = gap.estimatedEffort || '—';
+        if (detVal && gap.details) {
+            detVal.innerHTML = escapeHtml(gap.details);
+            detVal.closest('.detail-item').style.display = '';
+        }
+        if (noGap) {
+            detailRow.classList.add('no-gap-detail');
+        }
     }
 
     targetRow.dataset.details = gap.details || '';
     targetRow.dataset.gapId = gap.id;
     targetRow.dataset.hasGap = gap.hasGap ? '1' : '0';
 
+    // Make requirement clickable to expand details
     const reqDiv = cells[1].querySelector('.td-requirement');
-    if (reqDiv && gap.details) {
-        reqDiv.onclick = () => toggleDetails(targetRow);
-        reqDiv.style.cursor = 'pointer';
+    if (reqDiv) {
+        reqDiv.onclick = () => toggleExpandableDetail(targetRow);
+        reqDiv.classList.add('expandable-req');
     }
 
     targetRow.classList.add('row-enriched');
@@ -550,10 +621,16 @@ function enrichRowWithGap(gap) {
 
 function revealCheckboxesForIssues() {
     // After gap analysis, re-show checkboxes only for gap-found rows
+    // Also show agent dropdown column
+    document.getElementById('colAgentHeader').style.display = '';
+
     document.querySelectorAll('.unified-row').forEach(row => {
         const checkTd = row.querySelector('.col-check');
         const checkbox = checkTd.querySelector('input[type="checkbox"]');
         checkbox.disabled = false;
+
+        const agentTd = row.querySelector('.col-agent-type');
+        agentTd.style.display = '';
 
         const isNoGap = row.dataset.hasGap === '0';
         if (isNoGap) {
@@ -561,9 +638,17 @@ function revealCheckboxesForIssues() {
             checkbox.checked = false;
             checkTd.querySelector('.checkmark').classList.add('checkmark-disabled');
             row.classList.remove('selected');
+            agentTd.innerHTML = `<span class="text-muted">—</span>`;
         } else {
             checkbox.checked = true;
             row.classList.add('selected');
+            const gapId = row.dataset.gapId || '0';
+            agentTd.innerHTML = `
+                <select class="agent-type-select" data-gap-id="${gapId}" data-row-index="${row.dataset.index}">
+                    <option value="cloud" selected>☁️ Cloud</option>
+                    <option value="local">💻 Local</option>
+                </select>
+            `;
         }
     });
 
@@ -580,24 +665,16 @@ function revealCheckboxesForIssues() {
 function toggleDetails(row) {
     const details = row.dataset.details;
     if (!details) return;
+    toggleExpandableDetail(row);
+}
 
-    const existing = row.nextElementSibling;
-    if (existing && existing.classList.contains('row-details')) {
-        existing.classList.toggle('show');
-        row.querySelector('.td-requirement')?.classList.toggle('expanded');
-        return;
-    }
+function toggleExpandableDetail(row) {
+    const idx = row.dataset.index;
+    const detailRow = document.getElementById(`unified-detail-${idx}`);
+    if (!detailRow) return;
 
-    const detailRow = document.createElement('tr');
-    detailRow.className = 'row-details show';
-    detailRow.innerHTML = `
-        <td colspan="7">
-            <div class="details-label">Implementation Details</div>
-            <div class="details-content">${escapeHtml(details)}</div>
-        </td>
-    `;
-    row.after(detailRow);
-    row.querySelector('.td-requirement')?.classList.add('expanded');
+    detailRow.classList.toggle('show');
+    row.querySelector('.td-requirement')?.classList.toggle('expanded');
 }
 
 function escapeHtml(text) {
@@ -700,332 +777,92 @@ function updateSelectedCount() {
     selectAll.indeterminate = count > 0 && count < actionable.length;
 }
 
-// ─── Step 2: Create Issues (SSE streaming) ────────────────────────────────────
-async function createIssues() {
+// ─── Step 2: Dispatch Selected (unified: issue creation + agent dispatch) ─────
+async function dispatchSelected() {
     const selectedGaps = gaps.filter(g => g.selected && g.hasGap);
     if (selectedGaps.length === 0) {
-        showToast('Please select at least one gap to create issues for.');
+        showToast('Please select at least one gap to dispatch.');
         return;
     }
 
-    const selectedIds = selectedGaps.map(g => g.id);
-    const total = selectedIds.length;
+    // Partition by agent type from unified table dropdowns
+    const cloudGaps = [];
+    const localGaps = [];
+    selectedGaps.forEach(gap => {
+        const select = document.querySelector(`.agent-type-select[data-gap-id="${gap.id}"]`);
+        const agentType = select ? select.value : 'cloud';
+        if (agentType === 'local') {
+            localGaps.push(gap);
+        } else {
+            cloudGaps.push(gap);
+        }
+    });
 
     const btn = document.getElementById('btnCreateIssues');
     btn.disabled = true;
-    setStatus('Creating Issues...', 'processing');
+    const cloudLabel = cloudGaps.length > 0 ? `${cloudGaps.length} cloud` : '';
+    const localLabel = localGaps.length > 0 ? `${localGaps.length} local` : '';
+    const dispatchLabel = [cloudLabel, localLabel].filter(Boolean).join(' + ');
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Dispatching ${dispatchLabel}...`;
+
+    setStatus('Dispatching Agents...', 'processing');
     setStep(3);
 
-    // Switch to issues panel and reset it
-    createdIssues = [];
-    document.getElementById('issueCreationProgress').style.display = 'block';
-    document.getElementById('issueProgressLabel').textContent = `0 / ${total}`;
-    document.getElementById('issueProgressFill').style.width = '0%';
-    document.getElementById('issueProgressDetail').textContent = 'Connecting to GitHub...';
+    // Update status on unified table rows to "Dispatching"
+    selectedGaps.forEach(gap => {
+        const row = document.getElementById(`unified-row-${gap.id - 1}`);
+        if (row) {
+            const statusCell = row.querySelector('.col-status');
+            if (statusCell) statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Dispatching</span>`;
+        }
+    });
+
+    // Show a log panel for dispatch output
+    showPanel('panel-issues');
+    document.getElementById('issueCreationProgress').style.display = 'none';
     document.getElementById('issueTableHeader').style.display = 'none';
     document.getElementById('issueTableContainer').style.display = 'none';
-    document.getElementById('issueTableBody').innerHTML = '';
     document.getElementById('issueLog').style.display = 'block';
     document.getElementById('issueLogEntries').innerHTML = '';
-    showPanel('panel-issues');
+
+    let allResults = [];
+    createdIssues = [];
 
     try {
-        const response = await fetch('/api/create-issues', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ selectedIds }),
-        });
+        const promises = [];
 
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Failed to create issues');
+        // Cloud path: create issues first, then assign coding agent
+        if (cloudGaps.length > 0) {
+            promises.push(dispatchCloudFromGaps(cloudGaps));
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+        // Local path: dispatch directly via Copilot SDK
+        if (localGaps.length > 0) {
+            promises.push(dispatchLocalFromGaps(localGaps));
+        }
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
+        const results = await Promise.all(promises);
+        allResults = results.flat();
 
-            // Parse SSE events from buffer
-            const chunks = buffer.split('\n\n');
-            buffer = chunks.pop(); // keep incomplete chunk
-
-            for (const chunk of chunks) {
-                if (!chunk.trim()) continue;
-                const lines = chunk.split('\n');
-                let eventType = '';
-                let eventData = '';
-                for (const line of lines) {
-                    if (line.startsWith('event: ')) eventType = line.slice(7);
-                    if (line.startsWith('data: ')) eventData = line.slice(6);
-                }
-                if (!eventType || !eventData) continue;
-
-                if (eventType === 'progress') {
-                    const { current, total: t, message } = JSON.parse(eventData);
-                    document.getElementById('issueProgressLabel').textContent = `${current} / ${t}`;
-                    document.getElementById('issueProgressFill').style.width = `${(current / t) * 100}%`;
-                    document.getElementById('issueProgressDetail').textContent = message;
-                } else if (eventType === 'issue') {
-                    const { issue } = JSON.parse(eventData);
-                    createdIssues.push(issue);
-                    // Show table as soon as first issue arrives
-                    document.getElementById('issueTableContainer').style.display = 'block';
-                    appendIssueRow(issue);
-                } else if (eventType === 'log') {
-                    const { message } = JSON.parse(eventData);
-                    appendLog('issueLogEntries', message);
-                } else if (eventType === 'complete') {
-                    finalizeIssueCreation();
-                } else if (eventType === 'error') {
-                    const { error } = JSON.parse(eventData);
-                    throw new Error(error);
+        // Update unified table rows with results
+        allResults.forEach(result => {
+            const gapId = result.gapId || result.issueNumber;
+            const row = document.getElementById(`unified-row-${gapId - 1}`);
+            if (row) {
+                const statusCell = row.querySelector('.col-status');
+                if (statusCell) {
+                    statusCell.innerHTML = result.assigned
+                        ? '<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Dispatched</span>'
+                        : '<span class="status-chip error"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Failed</span>';
                 }
             }
-        }
-
-        // In case complete event wasn't in the last chunk
-        if (createdIssues.length > 0 && document.getElementById('issueTableHeader').style.display === 'none') {
-            finalizeIssueCreation();
-        }
-
-    } catch (error) {
-        showToast(error.message);
-        setStatus('Error', 'error');
-        btn.disabled = false;
-        btn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
-            Create Issues for Selected
-            <span class="btn-badge" id="selectedCount">${selectedIds.length}</span>
-        `;
-    }
-}
-
-function appendIssueRow(issue) {
-    const tbody = document.getElementById('issueTableBody');
-    const tr = document.createElement('tr');
-    tr.classList.add('issue-row');
-    tr.dataset.issueNumber = issue.number;
-
-    const failed = !issue.number || issue.number === 0 || issue.error;
-
-    let issueNumCell;
-    let statusCell;
-    let checkboxCell;
-
-    if (failed) {
-        issueNumCell = `<span class="text-muted">—</span>`;
-        statusCell = `<span class="status-chip failed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Failed</span>`;
-        checkboxCell = `
-            <label class="checkbox-wrapper">
-                <input type="checkbox" data-issue-num="0" disabled>
-                <span class="checkmark"></span>
-            </label>
-        `;
-        tr.classList.add('issue-row-failed');
-    } else {
-        const issueUrl = issue.url && issue.url !== '#'
-            ? `<a href="${escapeHtml(issue.url)}" target="_blank" class="issue-link">#${issue.number} <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`
-            : `<span class="text-muted">#${issue.number}</span>`;
-        issueNumCell = issueUrl;
-        statusCell = `<span class="status-chip analyzed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Created</span>`;
-        checkboxCell = `
-            <label class="checkbox-wrapper">
-                <input type="checkbox" data-issue-num="${issue.number}" checked onchange="handleIssueCheckboxChange(${issue.number})">
-                <span class="checkmark"></span>
-            </label>
-        `;
-    }
-
-    tr.innerHTML = `
-        <td class="col-check">${checkboxCell}</td>
-        <td class="col-issue-num">${issueNumCell}</td>
-        <td class="col-req"><div class="td-requirement" style="cursor:default;">${escapeHtml(issue.title)}</div></td>
-        <td class="col-issue-status">${statusCell}</td>
-    `;
-    tbody.appendChild(tr);
-
-    issue.selectedForAssign = !failed;
-
-    // Auto-scroll table
-    const container = document.getElementById('issueTableContainer');
-    if (container) container.scrollTop = container.scrollHeight;
-}
-
-function finalizeIssueCreation() {
-    // Hide progress, show header + actions
-    document.getElementById('issueCreationProgress').style.display = 'none';
-    document.getElementById('issueTableHeader').style.display = 'flex';
-
-    const successCount = createdIssues.filter(i => i.number > 0 && !i.error).length;
-    const failCount = createdIssues.length - successCount;
-
-    document.getElementById('issueCount').textContent = successCount;
-
-    // Select all successful by default
-    document.getElementById('selectAllIssues').checked = successCount > 0;
-    updateAssignCount();
-
-    if (failCount > 0 && successCount > 0) {
-        setStatus(`${successCount} Issues Created, ${failCount} Failed`, 'warning');
-        showToast(`${failCount} issue(s) failed to create. Check logs for details.`);
-    } else if (failCount > 0 && successCount === 0) {
-        setStatus('All Issues Failed', 'error');
-        showToast('All issues failed to create. Check logs for details.');
-    } else {
-        setStatus(`${successCount} Issues Created`, '');
-    }
-}
-
-// ─── Issue checkbox handling ──────────────────────────────────────────────────
-function handleIssueCheckboxChange(issueNumber) {
-    const issue = createdIssues.find(i => i.number === issueNumber);
-    if (issue) {
-        const cb = document.querySelector(`input[data-issue-num="${issueNumber}"]`);
-        issue.selectedForAssign = cb.checked;
-        cb.closest('tr').classList.toggle('selected', cb.checked);
-    }
-    updateAssignCount();
-}
-
-function handleSelectAllIssues() {
-    const checked = document.getElementById('selectAllIssues').checked;
-    createdIssues.forEach(i => { i.selectedForAssign = checked; });
-    document.querySelectorAll('.issue-row input[type="checkbox"]').forEach(cb => {
-        cb.checked = checked;
-        cb.closest('tr').classList.toggle('selected', checked);
-    });
-    updateAssignCount();
-}
-
-function toggleAllIssueCheckboxes() {
-    const anySelected = createdIssues.some(i => i.selectedForAssign);
-    const newState = !anySelected;
-    createdIssues.forEach(i => { i.selectedForAssign = newState; });
-    document.querySelectorAll('.issue-row input[type="checkbox"]').forEach(cb => {
-        cb.checked = newState;
-        cb.closest('tr').classList.toggle('selected', newState);
-    });
-    document.getElementById('selectAllIssues').checked = newState;
-    updateAssignCount();
-}
-
-function updateAssignCount() {
-    const assignable = createdIssues.filter(i => i.number > 0 && !i.error);
-    const count = assignable.filter(i => i.selectedForAssign).length;
-    document.getElementById('assignCount').textContent = count;
-    document.getElementById('btnAssignAgent').disabled = count === 0;
-
-    const selectAll = document.getElementById('selectAllIssues');
-    selectAll.checked = count === assignable.length && assignable.length > 0;
-    selectAll.indeterminate = count > 0 && count < assignable.length;
-}
-
-// ─── Step 3: Assign Coding Agent ──────────────────────────────────────────────
-async function assignAgent() {
-    const selectedIssues = createdIssues.filter(i => i.selectedForAssign);
-    if (selectedIssues.length === 0) {
-        showToast('Please select at least one issue to assign.');
-        return;
-    }
-
-    const btn = document.getElementById('btnAssignAgent');
-    btn.disabled = true;
-    btn.innerHTML = `
-        <div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div>
-        Assigning Copilot...
-    `;
-
-    setStatus('Assigning Agent...', 'processing');
-
-    const issueNumbers = selectedIssues.map(i => i.number).filter(n => n > 0);
-    const total = issueNumbers.length;
-
-    // Show assignment progress area
-    document.getElementById('assignProgress').style.display = 'block';
-    document.getElementById('assignProgressLabel').textContent = `0 / ${total}`;
-    document.getElementById('assignProgressFill').style.width = '0%';
-    document.getElementById('assignLogEntries').innerHTML = '';
-
-    let assignResults = [];
-
-    try {
-        const response = await fetch('/api/assign-coding-agent', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ issueNumbers }),
         });
 
-        if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || 'Failed to assign coding agent');
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-
-            const chunks = buffer.split('\n\n');
-            buffer = chunks.pop();
-
-            for (const chunk of chunks) {
-                if (!chunk.trim()) continue;
-                const lines = chunk.split('\n');
-                let eventType = '';
-                let eventData = '';
-                for (const line of lines) {
-                    if (line.startsWith('event: ')) eventType = line.slice(7);
-                    if (line.startsWith('data: ')) eventData = line.slice(6);
-                }
-                if (!eventType || !eventData) continue;
-
-                if (eventType === 'progress') {
-                    const { current, total: t } = JSON.parse(eventData);
-                    document.getElementById('assignProgressLabel').textContent = `${current} / ${t}`;
-                    document.getElementById('assignProgressFill').style.width = `${(current / t) * 100}%`;
-                } else if (eventType === 'result') {
-                    const { result } = JSON.parse(eventData);
-                    assignResults.push(result);
-                    // Update the issue row status
-                    const row = document.querySelector(`tr[data-issue-number="${result.issueNumber}"]`);
-                    if (row) {
-                        const statusTd = row.querySelector('.col-issue-status');
-                        if (statusTd) {
-                            if (result.assigned) {
-                                statusTd.innerHTML = `<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Assigned</span>`;
-                            } else {
-                                statusTd.innerHTML = `<span class="status-chip error"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Failed</span>`;
-                            }
-                        }
-                    }
-                } else if (eventType === 'log') {
-                    const { message } = JSON.parse(eventData);
-                    appendLog('assignLogEntries', message);
-                } else if (eventType === 'complete') {
-                    const data = JSON.parse(eventData);
-                    assignResults = data.results || assignResults;
-                } else if (eventType === 'error') {
-                    const { error } = JSON.parse(eventData);
-                    throw new Error(error);
-                }
-            }
-        }
-
-        // Finalize
-        document.getElementById('assignProgress').style.display = 'none';
         setStep(4);
-        setStatus('Complete!', '');
-        renderCompletion(assignResults);
+        setStatus('Agents Dispatched', '');
+        renderCompletion(allResults);
         showPanel('panel-complete');
+
     } catch (error) {
         showToast(error.message);
         setStatus('Error', 'error');
@@ -1035,28 +872,200 @@ async function assignAgent() {
                 <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>
                 <circle cx="12" cy="15" r="2"/>
             </svg>
-            Assign Copilot to Selected
-            <span class="btn-badge" id="assignCount">${issueNumbers.length}</span>
+            Dispatch Selected
+            <span class="btn-badge" id="selectedCount">${selectedGaps.length}</span>
         `;
     }
+}
+
+// ─── Cloud dispatch from gaps: create issues → assign coding agent ────────────
+async function dispatchCloudFromGaps(cloudGaps) {
+    const selectedIds = cloudGaps.map(g => g.id);
+    appendLog('issueLogEntries', `☁️ Creating ${selectedIds.length} issue(s) on GitHub...`);
+
+    // Step 1: Create issues
+    const response = await fetch('/api/create-issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selectedIds }),
+    });
+
+    if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to create issues');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let newIssues = [];
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop();
+
+        for (const chunk of chunks) {
+            if (!chunk.trim()) continue;
+            const lines = chunk.split('\n');
+            let eventType = '', eventData = '';
+            for (const line of lines) {
+                if (line.startsWith('event: ')) eventType = line.slice(7);
+                if (line.startsWith('data: ')) eventData = line.slice(6);
+            }
+            if (!eventType || !eventData) continue;
+
+            if (eventType === 'issue') {
+                const { issue } = JSON.parse(eventData);
+                newIssues.push(issue);
+                createdIssues.push(issue);
+                appendLog('issueLogEntries', `  ✅ Issue #${issue.number}: ${issue.title}`);
+            } else if (eventType === 'log') {
+                const { message } = JSON.parse(eventData);
+                appendLog('issueLogEntries', message);
+            } else if (eventType === 'error') {
+                const { error } = JSON.parse(eventData);
+                throw new Error(error);
+            }
+        }
+    }
+
+    if (newIssues.length === 0) return [];
+
+    // Step 2: Assign coding agent
+    const issueNumbers = newIssues.map(i => i.number).filter(n => n > 0);
+    appendLog('issueLogEntries', `☁️ Assigning ${issueNumbers.length} issue(s) to GitHub Copilot Coding Agent...`);
+
+    const assignResp = await fetch('/api/assign-coding-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ issueNumbers }),
+    });
+
+    if (!assignResp.ok) {
+        const errData = await assignResp.json();
+        throw new Error(errData.error || 'Failed to assign coding agent');
+    }
+
+    const assignReader = assignResp.body.getReader();
+    let assignBuffer = '';
+    let results = [];
+
+    while (true) {
+        const { done, value } = await assignReader.read();
+        if (done) break;
+        assignBuffer += decoder.decode(value, { stream: true });
+        const chunks = assignBuffer.split('\n\n');
+        assignBuffer = chunks.pop();
+
+        for (const chunk of chunks) {
+            if (!chunk.trim()) continue;
+            const lines = chunk.split('\n');
+            let eventType = '', eventData = '';
+            for (const line of lines) {
+                if (line.startsWith('event: ')) eventType = line.slice(7);
+                if (line.startsWith('data: ')) eventData = line.slice(6);
+            }
+            if (!eventType || !eventData) continue;
+
+            if (eventType === 'assignment') {
+                const result = JSON.parse(eventData);
+                results.push({ gapId: result.issueNumber, issueNumber: result.issueNumber, assigned: result.assigned, message: result.message });
+                appendLog('issueLogEntries', result.assigned
+                    ? `  ✅ #${result.issueNumber} → Copilot Coding Agent assigned`
+                    : `  ❌ #${result.issueNumber} → Failed to assign`);
+            } else if (eventType === 'log') {
+                const { message } = JSON.parse(eventData);
+                appendLog('issueLogEntries', message);
+            } else if (eventType === 'complete') {
+                const data = JSON.parse(eventData);
+                if (data.results) results = data.results.map(r => ({ ...r, gapId: r.issueNumber }));
+            }
+        }
+    }
+
+    return results;
+}
+
+// ─── Local dispatch from gaps: direct Copilot SDK ─────────────────────────────
+async function dispatchLocalFromGaps(localGaps) {
+    const gapIds = localGaps.map(g => g.id);
+    appendLog('issueLogEntries', `💻 Dispatching ${gapIds.length} gap(s) to local Copilot SDK agent...`);
+
+    const response = await fetch('/api/execute-local-agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gapIds }),
+    });
+
+    if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to start local agent');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let results = [];
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop();
+
+        for (const chunk of chunks) {
+            if (!chunk.trim()) continue;
+            const lines = chunk.split('\n');
+            let eventType = '', eventData = '';
+            for (const line of lines) {
+                if (line.startsWith('event: ')) eventType = line.slice(7);
+                if (line.startsWith('data: ')) eventData = line.slice(6);
+            }
+            if (!eventType || !eventData) continue;
+
+            if (eventType === 'item-complete') {
+                const data = JSON.parse(eventData);
+                results.push({ gapId: data.id, assigned: data.success, message: data.summary });
+                appendLog('issueLogEntries', data.success
+                    ? `  ✅ Gap ${data.id}: ${(data.summary || '').substring(0, 60)}`
+                    : `  ❌ Gap ${data.id}: Failed`);
+            } else if (eventType === 'item-start') {
+                const { id, requirement } = JSON.parse(eventData);
+                appendLog('issueLogEntries', `💻 Local agent starting: ${requirement.substring(0, 60)}...`);
+            } else if (eventType === 'log') {
+                const { message } = JSON.parse(eventData);
+                appendLog('issueLogEntries', message);
+            } else if (eventType === 'error') {
+                const { error } = JSON.parse(eventData);
+                throw new Error(error);
+            }
+        }
+    }
+
+    return results;
 }
 
 // ─── Render Completion ────────────────────────────────────────────────────────
 function renderCompletion(results) {
     const assigned = results.filter(r => r.assigned).length;
+    const issueCount = createdIssues.length;
 
     document.getElementById('completeStats').innerHTML = `
         <div class="stat-item">
             <span class="stat-value">${gaps.filter(g => g.hasGap).length}</span>
             <span class="stat-label">Gaps Found</span>
         </div>
-        <div class="stat-item">
-            <span class="stat-value">${createdIssues.length}</span>
+        ${issueCount > 0 ? `<div class="stat-item">
+            <span class="stat-value">${issueCount}</span>
             <span class="stat-label">Issues Created</span>
-        </div>
+        </div>` : ''}
         <div class="stat-item">
             <span class="stat-value">${assigned}</span>
-            <span class="stat-label">Agent Assigned</span>
+            <span class="stat-label">Dispatched</span>
         </div>
     `;
 
@@ -1073,14 +1082,360 @@ function resetApp() {
     createdIssues = [];
     currentStep = 1;
     analysisComplete = false;
+    analysisPhase = 'idle';
+    deployedUrl = '';
+    validationResults = [];
+    qaMode = false;
+    previousPanel = 'panel-analyze';
     setStep(1);
     setStatus('Ready', '');
     showPanel('panel-analyze');
     document.getElementById('btnAnalyze').disabled = false;
+    // Reset agent column visibility
+    const colAgentHeader = document.getElementById('colAgentHeader');
+    if (colAgentHeader) colAgentHeader.style.display = 'none';
+
+    const fab = document.getElementById('fabQA');
+    if (fab) {
+        fab.classList.remove('active', 'visible');
+        const buildLabel = fab.querySelector('.mode-switch-label--build');
+        const qaLabel = fab.querySelector('.mode-switch-label--qa');
+        if (buildLabel) buildLabel.classList.add('active');
+        if (qaLabel) qaLabel.classList.remove('active');
+    }
+    const buildTrack = document.getElementById('trackBuild');
+    const qaTrack = document.getElementById('trackQA');
+    if (buildTrack) buildTrack.classList.add('active');
+    if (qaTrack) qaTrack.classList.remove('active');
+    setQAStep(null);
+    const qaUrlBar = document.getElementById('qaDeployUrlBar');
+    if (qaUrlBar) qaUrlBar.style.display = 'none';
+    const qaProgress = document.getElementById('qaWorkflowProgress');
+    if (qaProgress) qaProgress.style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// QA MODE — Ship & Validate
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function updateQAFabVisibility() {
+    const fab = document.getElementById('fabQA');
+    fab.classList.add('visible');
+}
+
+function toggleQAMode() {
+    qaMode = !qaMode;
+    const sw = document.getElementById('fabQA');
+    const buildLabel = sw.querySelector('.mode-switch-label--build');
+    const qaLabel = sw.querySelector('.mode-switch-label--qa');
+    const buildTrack = document.getElementById('trackBuild');
+    const qaTrack = document.getElementById('trackQA');
+
+    if (qaMode) {
+        sw.classList.add('active');
+        buildLabel.classList.remove('active');
+        qaLabel.classList.add('active');
+        if (buildTrack) buildTrack.classList.remove('active');
+        if (qaTrack) qaTrack.classList.add('active');
+        try { buildQAGapTable(); } catch (e) { console.warn('buildQAGapTable error:', e); }
+        showPanel('panel-qa');
+    } else {
+        sw.classList.remove('active');
+        buildLabel.classList.add('active');
+        qaLabel.classList.remove('active');
+        if (buildTrack) buildTrack.classList.add('active');
+        if (qaTrack) qaTrack.classList.remove('active');
+        showPanel(previousPanel);
+    }
+}
+
+function buildQAGapTable() {
+    const tbody = document.getElementById('qaGapTableBody');
+    tbody.innerHTML = '';
+
+    const totalReqs = requirements.length;
+    const gapCount = gaps.filter(g => g.hasGap).length;
+    const metCount = gaps.filter(g => !g.hasGap).length;
+
+    let summaryParts = [`${totalReqs} requirements`];
+    if (gaps.length > 0) summaryParts.push(`${gapCount} gaps`);
+    if (metCount > 0) summaryParts.push(`${metCount} met`);
+    document.getElementById('qaGapSummary').innerHTML =
+        `<span id="qaReqTotal">${totalReqs}</span> ` + escapeHtml(summaryParts.join(' \u00b7 '));
+
+    const validationMap = {};
+    validationResults.forEach(v => {
+        validationMap[v.requirement.trim()] = v;
+    });
+
+    requirements.forEach((req, i) => {
+        const tr = document.createElement('tr');
+        tr.id = `qa-row-${i}`;
+
+        const gap = gaps.find(g => g.id === i + 1);
+        const vr = validationMap[req.trim()];
+
+        let statusHtml = '';
+        let complexityHtml = '<span class="text-muted">\u2014</span>';
+
+        if (vr) {
+            if (vr.passed) {
+                statusHtml = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Pass</span>';
+            } else {
+                statusHtml = '<span class="status-chip gap-found"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Fail</span>';
+            }
+        } else if (gap) {
+            if (gap.hasGap) {
+                statusHtml = '<span class="status-chip analyzed">Gap</span>';
+            } else {
+                statusHtml = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Met</span>';
+            }
+        } else {
+            statusHtml = '<span class="status-chip pending">Pending</span>';
+        }
+
+        if (gap && gap.hasGap) {
+            complexityHtml = `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${gap.complexity}</span>`;
+        }
+
+        if (gap && !gap.hasGap && !vr) tr.classList.add('no-gap-row');
+
+        tr.innerHTML = `
+            <td><div class="td-requirement">${escapeHtml(req)}</div></td>
+            <td>${statusHtml}</td>
+            <td>${complexityHtml}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    const btn = document.getElementById('btnLaunchQA');
+    if (deployedUrl && validationResults.length > 0) {
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Re-deploy &amp; Validate
+        `;
+    }
+}
+
+// ─── Unified Ship & Validate Workflow ─────────────────────────────────────────
+
+async function launchQAWorkflow() {
+    const btn = document.getElementById('btnLaunchQA');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Deploying...`;
+
+    setStatus('Deploying to QA...', 'processing');
+    setQAStep('deploy');
+    validationResults = [];
+
+    const progressEl = document.getElementById('qaWorkflowProgress');
+    progressEl.style.display = '';
+    document.getElementById('qaWorkflowLogEntries').innerHTML = '';
+
+    const wfDeploy = document.getElementById('qaWfDeploy');
+    const wfValidate = document.getElementById('qaWfValidate');
+    wfDeploy.classList.add('active');
+    wfDeploy.classList.remove('done', 'failed');
+    wfValidate.classList.remove('active', 'done', 'failed');
+
+    buildQAGapTable();
+
+    try {
+        const deployUrl = await runDeploy();
+        if (!deployUrl) throw new Error('Deployment did not return a URL');
+
+        deployedUrl = deployUrl;
+        const urlBar = document.getElementById('qaDeployUrlBar');
+        urlBar.style.display = 'flex';
+        const urlLink = document.getElementById('qaDeployUrlLink');
+        urlLink.href = deployUrl;
+        urlLink.textContent = deployUrl;
+
+        wfDeploy.classList.remove('active');
+        wfDeploy.classList.add('done');
+        wfValidate.classList.add('active');
+
+        btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Validating...`;
+        setStatus('Validating...', 'processing');
+        setQAStep('validate');
+
+        await runValidation(deployUrl);
+
+        wfValidate.classList.remove('active');
+        wfValidate.classList.add('done');
+
+        const passed = validationResults.filter(v => v.passed).length;
+        const total = validationResults.length;
+        if (passed === total && total > 0) {
+            setStatus(`${total}/${total} Validated`, '');
+        } else {
+            setStatus(`${passed}/${total} Validated`, 'warning');
+        }
+        setQAStep('complete');
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Workflow Failed', 'error');
+        if (!wfDeploy.classList.contains('done')) {
+            wfDeploy.classList.remove('active');
+            wfDeploy.classList.add('failed');
+        } else {
+            wfValidate.classList.remove('active');
+            wfValidate.classList.add('failed');
+        }
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Re-deploy &amp; Validate
+        `;
+    }
+}
+
+async function runDeploy() {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const response = await fetch('/api/deploy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}),
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to start deployment');
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let url = null;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const chunks = buffer.split('\n\n');
+                buffer = chunks.pop();
+                for (const chunk of chunks) {
+                    if (!chunk.trim()) continue;
+                    const lines = chunk.split('\n');
+                    let eventType = '', eventData = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) eventType = line.slice(7);
+                        if (line.startsWith('data: ')) eventData = line.slice(6);
+                    }
+                    if (!eventType || !eventData) continue;
+                    if (eventType === 'log') {
+                        const { message } = JSON.parse(eventData);
+                        appendLog('qaWorkflowLogEntries', message);
+                    } else if (eventType === 'deploy-url') {
+                        url = JSON.parse(eventData).url;
+                    } else if (eventType === 'complete') {
+                        const data = JSON.parse(eventData);
+                        url = data.url || url;
+                    } else if (eventType === 'error') {
+                        const { error } = JSON.parse(eventData);
+                        throw new Error(error);
+                    }
+                }
+            }
+            resolve(url);
+        } catch (err) { reject(err); }
+    });
+}
+
+async function runValidation(url) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const response = await fetch('/api/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url }),
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to start validation');
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const chunks = buffer.split('\n\n');
+                buffer = chunks.pop();
+                for (const chunk of chunks) {
+                    if (!chunk.trim()) continue;
+                    const lines = chunk.split('\n');
+                    let eventType = '', eventData = '';
+                    for (const line of lines) {
+                        if (line.startsWith('event: ')) eventType = line.slice(7);
+                        if (line.startsWith('data: ')) eventData = line.slice(6);
+                    }
+                    if (!eventType || !eventData) continue;
+                    if (eventType === 'result') {
+                        const { result } = JSON.parse(eventData);
+                        validationResults.push(result);
+                        updateQATableRowWithValidation(result);
+                    } else if (eventType === 'log') {
+                        const { message } = JSON.parse(eventData);
+                        appendLog('qaWorkflowLogEntries', message);
+                    } else if (eventType === 'error') {
+                        const { error } = JSON.parse(eventData);
+                        throw new Error(error);
+                    }
+                }
+            }
+            resolve();
+        } catch (err) { reject(err); }
+    });
+}
+
+function updateQATableRowWithValidation(result) {
+    const reqText = result.requirement.trim();
+    let rowIdx = requirements.findIndex(r => r.trim() === reqText);
+    if (rowIdx === -1) {
+        rowIdx = requirements.findIndex(r =>
+            r.trim().toLowerCase().includes(reqText.toLowerCase().substring(0, 40)) ||
+            reqText.toLowerCase().includes(r.trim().toLowerCase().substring(0, 40))
+        );
+    }
+    if (rowIdx === -1) return;
+
+    const row = document.getElementById(`qa-row-${rowIdx}`);
+    if (!row) return;
+
+    const statusTd = row.querySelectorAll('td')[1];
+    if (result.passed) {
+        statusTd.innerHTML = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Pass</span>';
+        row.classList.remove('no-gap-row');
+        row.classList.add('validation-pass-row');
+    } else {
+        statusTd.innerHTML = '<span class="status-chip gap-found"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Fail</span>';
+        row.classList.remove('no-gap-row');
+        row.classList.add('validation-fail-row');
+    }
+
+    row.classList.add('row-enriched');
+    setTimeout(() => row.classList.remove('row-enriched'), 1200);
+
+    const passed = validationResults.filter(v => v.passed).length;
+    const failed = validationResults.filter(v => !v.passed).length;
+    const gapCount = gaps.filter(g => g.hasGap).length;
+    const metCount = gaps.filter(g => !g.hasGap).length;
+    let summaryParts = [`${requirements.length} requirements`];
+    if (gaps.length > 0) summaryParts.push(`${gapCount} gaps`);
+    if (metCount > 0) summaryParts.push(`${metCount} met`);
+    if (validationResults.length > 0) summaryParts.push(`${passed} pass \u00b7 ${failed} fail`);
+    document.getElementById('qaGapSummary').innerHTML =
+        `<span id="qaReqTotal">${requirements.length}</span> ` + escapeHtml(summaryParts.join(' \u00b7 '));
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     setStep(1);
     showPanel('panel-analyze');
+    updateQAFabVisibility();
 });

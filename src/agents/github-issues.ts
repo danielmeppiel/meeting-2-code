@@ -93,7 +93,7 @@ export async function createGithubIssues(
 
             if (issueNumber > 0) {
                 const issue: CreatedIssue = {
-                    id: i + 1,
+                    id: gap.id,
                     title,
                     number: issueNumber,
                     url,
@@ -106,7 +106,7 @@ export async function createGithubIssues(
                 console.error(`[github-issues] Unexpected gh output for issue ${i + 1}:`, stdout);
                 log(`⚠ Issue ${i + 1}: unexpected output — ${stdout.substring(0, 100)}`);
                 const issue: CreatedIssue = {
-                    id: i + 1,
+                    id: gap.id,
                     title,
                     number: 0,
                     url: "#",
@@ -120,7 +120,7 @@ export async function createGithubIssues(
             console.error(`[github-issues] Error creating issue ${i + 1}:`, errorMsg);
             log(`✘ Error creating issue ${i + 1}: ${errorMsg.substring(0, 150)}`);
             const issue: CreatedIssue = {
-                id: i + 1,
+                id: gap.id,
                 title,
                 number: 0,
                 url: "#",
