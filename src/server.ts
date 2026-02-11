@@ -262,10 +262,15 @@ app.post("/api/deploy", async (_req, res) => {
 
 // Step 4b: Validate deployment against requirements (SSE streaming)
 app.post("/api/validate", async (req, res) => {
-    const { url } = req.body as { url: string };
+    const { url, requirements: clientRequirements } = req.body as { url: string; requirements?: string[] };
 
     if (!url) {
         return res.status(400).json({ success: false, error: "No URL provided" });
+    }
+
+    // Accept requirements from the client (survives server restarts)
+    if (clientRequirements?.length) {
+        lastRequirements = clientRequirements;
     }
 
     if (lastRequirements.length === 0) {

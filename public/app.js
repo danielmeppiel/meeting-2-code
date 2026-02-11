@@ -169,8 +169,8 @@ function markAllStepsDone() {
     });
 }
 
-async function requestConsultation() {
-    const btn = document.getElementById('btnConsultation');
+async function startAnalysis() {
+    const btn = document.getElementById('btnAnalyze');
     btn.disabled = true;
     analysisComplete = false;
     analysisPhase = 'extracting';
@@ -1574,7 +1574,7 @@ function resetApp() {
     setStep(1);
     setStatus('Ready', '');
     showPanel('panel-analyze');
-    document.getElementById('btnConsultation').disabled = false;
+    document.getElementById('btnAnalyze').disabled = false;
     // Reset agent column visibility
     const colAgentHeader = document.getElementById('colAgentHeader');
     if (colAgentHeader) colAgentHeader.style.display = 'none';
@@ -1894,7 +1894,7 @@ async function runValidation(url) {
             const response = await fetch('/api/validate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url }),
+                body: JSON.stringify({ url, requirements }),
             });
             if (!response.ok) {
                 const errData = await response.json();

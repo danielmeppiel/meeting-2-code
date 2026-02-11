@@ -148,11 +148,11 @@
                         </div>
                     </div>
 
-                    <button class="btn btn-primary btn-xl" id="btnConsultation" onclick="requestConsultation()">
+                    <button class="btn btn-primary btn-xl" id="btnAnalyze" onclick="startAnalysis()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="5 3 19 12 5 21 5 3"/>
                         </svg>
-                        Request a Consultation
+                        Analyze a Meeting
                     </button>
                     <div class="hero-features">
                         <div class="feature-chip">
@@ -445,18 +445,22 @@
                         <div class="qa-workflow-steps">
                             <div class="qa-wf-step" id="qaWfDeploy">
                                 <div class="qa-wf-step-icon qa-wf-step-icon--azure">
-                                    <svg width="16" height="16" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="azGrad" x1="13.3" y1="5.4" x2="33.8" y2="44.1" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#114A8B"/><stop offset="1" stop-color="#0669BC"/></linearGradient></defs><path d="M18.4 5.4h10.7L17 42.6a1.8 1.8 0 0 1-1.7 1.2H5.6A1.8 1.8 0 0 1 3.9 41l12.8-34.4a1.8 1.8 0 0 1 1.7-1.2z" fill="url(#azGrad)"/><path d="M34.2 29.8H16.8a.8.8 0 0 0-.5 1.4l11.2 10.4a1.8 1.8 0 0 0 1.3.5h11l-5.6-12.3z" fill="#0078D4" fill-opacity=".8"/><path d="M18.4 5.4a1.8 1.8 0 0 0-1.7 1.2L3.9 41a1.8 1.8 0 0 0 1.7 2.8h10a1.8 1.8 0 0 0 1.5-1l2.6-6.8 7.4 6.9a1.9 1.9 0 0 0 1.1.4H39l-5.6-12.5-9.2.1L30.9 5.4z" fill="url(#azGrad)"/><path d="M30.6 5.4H18.4a1.8 1.8 0 0 0-1.7 1.2L3.9 41a1.8 1.8 0 0 0 1.7 2.8h10.2a2 2 0 0 0 1.4-1l2.7-7 7.3 7a1.9 1.9 0 0 0 1.2.5h10.7l-5.6-12.5H24.7l8-22.2a1.8 1.8 0 0 0-1.7-1.2z" fill="rgba(255,255,255,.25)"/></svg>
+                                    <img src="https://cdn.worldvectorlogo.com/logos/azure-1.svg" alt="Azure" class="qa-wf-azure-logo">
                                 </div>
-                                <span>Deploying to Azure</span>
-                                <span class="qa-wf-agent-tag" style="color: #0078D4;">Deployer</span>
+                                <div class="qa-wf-step-text">
+                                    <span class="qa-wf-step-label">Deploying to Azure</span>
+                                    <span class="qa-wf-agent-tag" style="color: #0078D4;">Deployer</span>
+                                </div>
                             </div>
                             <div class="qa-wf-connector"></div>
                             <div class="qa-wf-step" id="qaWfValidate">
-                                <div class="qa-wf-step-icon">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                                <div class="qa-wf-step-icon qa-wf-step-icon--validate">
+                                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
                                 </div>
-                                <span>Validating</span>
-                                <span class="qa-wf-agent-tag" style="color: #f472b6;">Validator</span>
+                                <div class="qa-wf-step-text">
+                                    <span class="qa-wf-step-label">Validating</span>
+                                    <span class="qa-wf-agent-tag" style="color: #f472b6;">Validator</span>
+                                </div>
                             </div>
                         </div>
                         <details class="qa-workflow-log-details">
