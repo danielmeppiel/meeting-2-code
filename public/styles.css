@@ -524,6 +524,71 @@ body {
     border-radius: var(--radius-lg);
 }
 
+/* ─── Meeting Input Group ──────────────────────────────────────────────────── */
+.meeting-input-group {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    max-width: 620px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid var(--border-default);
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    transition: border-color var(--duration-normal) var(--ease-out),
+                box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.meeting-input-group:focus-within {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px var(--accent-blue-glow), 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.meeting-input-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 0 var(--space-lg);
+}
+
+.meeting-input-icon {
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+    opacity: 0.6;
+}
+
+.meeting-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    padding: var(--space-lg) 0;
+    caret-color: var(--accent-blue);
+}
+
+.meeting-input::placeholder {
+    color: var(--text-tertiary);
+    font-size: 0.88rem;
+}
+
+.meeting-input-group .btn {
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--border-subtle);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.meeting-input-group .btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
 .btn-badge {
     display: inline-flex;
     align-items: center;

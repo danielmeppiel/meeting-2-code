@@ -82,6 +82,7 @@ function parseMeetingResponse(
 // ── Phase 1: Extract meeting requirements via WorkIQ ───────────────────────
 
 interface ExtractOptions {
+    meetingName: string;
     workiqMcp: Record<string, MCPLocalServerConfig | MCPRemoteServerConfig>;
     onProgress?: (step: number, message: string) => void;
     onMeetingInfo?: (info: MeetingInfo) => void;
@@ -100,8 +101,9 @@ export async function extractMeetingRequirements(
     log("Initializing WorkIQ MCP session (npx @microsoft/workiq mcp)...");
     console.log("[gap-analyzer] Creating WorkIQ MCP session...");
 
+    const meetingName = options.meetingName;
     let requirements: string[] = [];
-    let info: MeetingInfo = { title: "Contoso Industries Redesign" };
+    let info: MeetingInfo = { title: meetingName };
 
     try {
         const meetingSession = await createAgentSession(client, {
@@ -118,10 +120,9 @@ export async function extractMeetingRequirements(
 
 ## Search Strategy
 Search for the meeting using MULTIPLE approaches if needed:
-- First try: search for "Contoso Industries Redesign"
-- If no results: search for "Contoso" alone
-- If no results: search for "Redesign"
-- If no results: list recent meetings/calendar events and find the most relevant one about Contoso or a website redesign
+- First try: search for "${meetingName}"
+- If no results: try shorter variations of the meeting name (individual keywords)
+- If no results: list recent meetings/calendar events and find the most relevant one
 
 ## Output Format
 After retrieving the meeting data, return ONLY a JSON object:
@@ -141,16 +142,16 @@ Do NOT output anything before or after the JSON object.`,
         });
 
         progress(1, "Fetching meeting from WorkIQ...");
-        log("Session created. Searching for meeting \"Contoso Industries Redesign\"...");
+        log(`Session created. Searching for meeting "${meetingName}"...`);
         console.log("[gap-analyzer] Sending WorkIQ query...");
 
         const meetingResult = await meetingSession.sendAndWait({
-            prompt: `Find the meeting about "Contoso Industries Redesign" in my Microsoft 365 calendar.
+            prompt: `Find the meeting about "${meetingName}" in my Microsoft 365 calendar.
 
 Step-by-step:
-1. Use the WorkIQ search/calendar tools to search for this meeting. Try the full title first: "Contoso Industries Redesign".
-2. If that returns nothing, search for just "Contoso".
-3. If still nothing, list my recent meetings and pick the one about Contoso or a website redesign.
+1. Use the WorkIQ search/calendar tools to search for this meeting. Try the full title first: "${meetingName}".
+2. If that returns nothing, try shorter variations or keywords from the title.
+3. If still nothing, list my recent meetings and pick the most relevant one.
 4. Once you find the meeting, retrieve its full notes, transcript, or body content.
 5. Extract all actionable requirements, decisions, and action items from the content.
 
@@ -202,7 +203,7 @@ CRITICAL: Only use WorkIQ/calendar tools. Do NOT use filesystem tools.`,
 
     if (requirements.length === 0) {
         throw new Error(
-            `No requirements found in the meeting. Make sure a meeting titled 'Contoso Industries Redesign' exists in your M365 calendar.`
+            `No requirements found in the meeting. Make sure a meeting titled '${meetingName}' exists in your M365 calendar.`
         );
     }
 

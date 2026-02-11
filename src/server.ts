@@ -68,9 +68,11 @@ function sseHeaders(res: express.Response) {
 // Step 1: Extract meeting requirements + create epic (SSE)
 app.get("/api/analyze", async (req, res) => {
     const sendEvent = sseHeaders(res);
+    const meetingName = (req.query.meeting as string) || "Contoso Industries Redesign";
 
     try {
         const result = await extractMeetingRequirements(client, {
+            meetingName,
             workiqMcp: getWorkIQMcpConfig(),
             onProgress: (step, message) => sendEvent("progress", { step, message }),
             onMeetingInfo: (info) => sendEvent("meeting-info", info),

@@ -16,6 +16,22 @@ let validationResults = [];
 let qaMode = false;
 let previousPanel = 'panel-analyze';
 
+// ─── Meeting Input Wiring ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('meetingNameInput');
+    const btn = document.getElementById('btnAnalyze');
+    if (input && btn) {
+        input.addEventListener('input', () => {
+            btn.disabled = !input.value.trim();
+        });
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && input.value.trim()) {
+                startAnalysis();
+            }
+        });
+    }
+});
+
 // ─── Panel Management ─────────────────────────────────────────────────────────
 function showPanel(panelId) {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -214,6 +230,10 @@ function markAllStepsDone() {
 }
 
 async function startAnalysis() {
+    const input = document.getElementById('meetingNameInput');
+    const meetingName = input ? input.value.trim() : '';
+    if (!meetingName) return;
+
     const btn = document.getElementById('btnAnalyze');
     btn.disabled = true;
     analysisComplete = false;
@@ -274,7 +294,7 @@ async function startAnalysis() {
 
     try {
         const result = await new Promise((resolve, reject) => {
-            const eventSource = new EventSource('/api/analyze');
+            const eventSource = new EventSource('/api/analyze?meeting=' + encodeURIComponent(meetingName));
 
             eventSource.addEventListener('progress', (e) => {
                 const { step, message } = JSON.parse(e.data);
@@ -1747,7 +1767,8 @@ function resetApp() {
     setStep(1);
     setStatus('Ready', '');
     showPanel('panel-analyze');
-    document.getElementById('btnAnalyze').disabled = false;
+    const meetingInput = document.getElementById('meetingNameInput');
+    document.getElementById('btnAnalyze').disabled = !(meetingInput && meetingInput.value.trim());
     // Reset agent column visibility
     const colAgentHeader = document.getElementById('colAgentHeader');
     if (colAgentHeader) colAgentHeader.style.display = 'none';
