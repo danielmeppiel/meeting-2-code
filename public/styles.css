@@ -2665,3 +2665,103 @@ body {
         min-width: auto;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Brand Logos — Office, Azure, Copilot, GitHub
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Microsoft 365 Meeting Source Brand ───────────────────────────────────── */
+.meeting-source-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 8px 16px;
+    margin-bottom: var(--space-md);
+    background: linear-gradient(135deg, rgba(217, 56, 27, 0.08), rgba(255, 185, 0, 0.08));
+    border: 1px solid rgba(217, 56, 27, 0.2);
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ff9f43;
+    animation: fadeSlideIn 0.4s var(--ease-out);
+}
+.meeting-source-brand img {
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 4px rgba(217, 56, 27, 0.3));
+}
+
+/* Office logo glow in meeting card */
+.meeting-card-icon .office-logo-img {
+    filter: drop-shadow(0 0 8px rgba(217, 56, 27, 0.3));
+    animation: office-logo-glow 2s ease-in-out infinite;
+}
+@keyframes office-logo-glow {
+    0%, 100% { filter: drop-shadow(0 0 8px rgba(217, 56, 27, 0.2)); }
+    50%      { filter: drop-shadow(0 0 16px rgba(217, 56, 27, 0.45)); }
+}
+
+.meeting-card-icon.found .office-logo-img {
+    animation: office-logo-found 0.5s var(--ease-spring);
+}
+@keyframes office-logo-found {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+/* ─── Azure Deploy Animation (QA track) ───────────────────────────────────── */
+.qa-wf-step-icon--azure {
+    position: relative;
+    overflow: visible;
+}
+
+.qa-wf-step.active .qa-wf-step-icon--azure {
+    background: rgba(0, 120, 212, 0.12) !important;
+}
+.qa-wf-step.active .qa-wf-step-icon--azure::after {
+    border-top-color: #0078D4 !important;
+}
+
+/* Floating code-to-cloud particles */
+.qa-wf-step.active .qa-wf-step-icon--azure::before {
+    content: '{ }';
+    position: absolute;
+    font-family: var(--font-mono);
+    font-size: 7px;
+    font-weight: 700;
+    color: #0078D4;
+    left: -18px;
+    bottom: -2px;
+    opacity: 0;
+    animation: code-to-azure 2s ease-in-out infinite;
+}
+
+@keyframes code-to-azure {
+    0%   { opacity: 0; transform: translate(0, 0) scale(0.8); }
+    20%  { opacity: 1; transform: translate(4px, -4px) scale(1); }
+    70%  { opacity: 0.8; transform: translate(14px, -12px) scale(0.9); }
+    100% { opacity: 0; transform: translate(20px, -6px) scale(0.5); }
+}
+
+.qa-wf-step.done .qa-wf-step-icon--azure {
+    background: rgba(0, 120, 212, 0.18) !important;
+}
+
+/* ─── Copilot Dispatch Badge ──────────────────────────────────────────────── */
+.dispatch-mode-badge.cloud {
+    background: rgba(110, 64, 201, 0.12) !important;
+    color: rgb(175, 140, 255) !important;
+    border: 1px solid rgba(110, 64, 201, 0.3) !important;
+}
+.dispatch-mode-badge.cloud .copilot-dispatch-icon {
+    opacity: 0.9;
+}
+
+/* ─── GitHub Octocat on Epic Links ─────────────────────────────────────────── */
+.epic-link svg {
+    opacity: 0.85 !important;
+    flex-shrink: 0;
+}
+.epic-link:hover svg {
+    opacity: 1 !important;
+}

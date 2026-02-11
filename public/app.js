@@ -204,6 +204,8 @@ async function requestConsultation() {
     // Show meeting card with initial state
     const liveRight = document.getElementById('liveRightPanel');
     if (liveRight) liveRight.style.display = '';
+    const meetingSourceBrand = document.getElementById('meetingSourceBrand');
+    if (meetingSourceBrand) meetingSourceBrand.style.display = 'none';
     const meetingCard = document.getElementById('meetingCard');
     meetingCard.style.display = 'flex';
     meetingCard.classList.remove('found');
@@ -254,9 +256,12 @@ async function requestConsultation() {
                 const card = document.getElementById('meetingCard');
                 card.style.display = 'flex';
                 card.classList.add('found');
+                // Show Office branding
+                const meetingBrand = document.getElementById('meetingSourceBrand');
+                if (meetingBrand) meetingBrand.style.display = 'flex';
                 const iconEl = document.getElementById('meetingCardIcon');
                 iconEl.className = 'meeting-card-icon found';
-                iconEl.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+                iconEl.innerHTML = `<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="48" height="48" style="object-fit: contain;" class="office-logo-img">`;
                 document.getElementById('meetingCardTitle').textContent = 'Meeting Found by Extractor';
                 if (info.date) {
                     document.getElementById('meetingCardDate').textContent = info.date;
@@ -802,7 +807,7 @@ function revealCheckboxesForIssues() {
             const gapId = row.dataset.gapId || '0';
             agentTd.innerHTML = `
                 <select class="agent-type-select" data-gap-id="${gapId}" data-row-index="${row.dataset.index}">
-                    <option value="cloud" selected>☁️ Cloud</option>
+                    <option value="cloud" selected>⚡ Copilot</option>
                     <option value="local">💻 Local</option>
                 </select>
             `;
@@ -1110,7 +1115,7 @@ function renderDispatchTable(selectedGaps, cloudGaps, localGaps) {
         // Mode badge
         let modeBadge = '';
         if (isCloud || (wasDispatched && !isLocal)) {
-            modeBadge = `<span class="dispatch-mode-badge cloud"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg> Cloud</span>`;
+            modeBadge = `<span class="dispatch-mode-badge cloud"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="copilot-dispatch-icon"><path d="M7.998 0a8 8 0 0 0-2.528 15.59c.4.074.546-.174.546-.386 0-.19-.007-.694-.01-1.362-2.226.484-2.695-1.074-2.695-1.074-.364-.924-.889-1.17-.889-1.17-.726-.496.055-.486.055-.486.803.057 1.225.824 1.225.824.714 1.222 1.873.87 2.329.665.073-.517.279-.87.508-1.07-1.777-.201-3.644-.888-3.644-3.953 0-.874.312-1.588.823-2.147-.083-.202-.357-1.015.077-2.117 0 0 .672-.215 2.2.82A7.673 7.673 0 0 1 8 3.868a7.68 7.68 0 0 1 2.003.27c1.527-1.035 2.198-.82 2.198-.82.435 1.102.162 1.915.08 2.117.512.56.822 1.273.822 2.147 0 3.073-1.87 3.749-3.653 3.947.287.248.543.735.543 1.481 0 1.07-.01 1.933-.01 2.196 0 .214.144.463.55.385A8.002 8.002 0 0 0 7.998 0z"/></svg> Copilot</span>`;
         } else if (isLocal) {
             modeBadge = `<span class="dispatch-mode-badge local"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg> Local</span>`;
         } else {
