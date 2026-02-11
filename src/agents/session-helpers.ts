@@ -11,6 +11,7 @@ export async function createAgentSession(
         mcpServers: Record<string, MCPLocalServerConfig | MCPRemoteServerConfig>;
         systemMessage: { content: string };
         label: string;
+        workingDirectory?: string;
         onLog?: (message: string) => void;
     },
 ) {
@@ -21,6 +22,7 @@ export async function createAgentSession(
         model: options.model,
         mcpServers: options.mcpServers,
         systemMessage: options.systemMessage,
+        ...(options.workingDirectory ? { workingDirectory: options.workingDirectory } : {}),
         onPermissionRequest: async (req) => {
             console.log(`[${label}] Permission requested: ${req.kind}`, JSON.stringify(req).substring(0, 200));
             log(`Permission auto-approved: ${req.kind}`);

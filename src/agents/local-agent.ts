@@ -205,6 +205,7 @@ export async function executeLocalAgent(
             const session = await createAgentSession(client, {
                 model: "claude-sonnet-4-20250514",
                 mcpServers: options.githubMcp,
+                workingDirectory: REPO_PATH,
                 systemMessage: {
                     content: `You are a coding agent that implements features in the ${OWNER}/${REPO} locally cloned repository.
 
