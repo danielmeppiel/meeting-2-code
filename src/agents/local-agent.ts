@@ -264,6 +264,21 @@ of every file that needs to change using the FILE: format described in your inst
             const changes = parseFileChanges(responseContent);
 
             if (changes.length === 0) {
+                // The agent may have used built-in SDK filesystem tools to write
+                // files directly (via workingDirectory). Check git for changes.
+                const { stdout: gitStatus } = await execAsync("git status --porcelain", { cwd: REPO_PATH, timeout: 10_000 });
+                if (gitStatus.trim()) {
+                    const changedFiles = gitStatus.trim().split("\n").map(l => l.substring(3).trim());
+                    log(`Agent used built-in tools to write ${changedFiles.length} file(s): ${changedFiles.join(", ")}`);
+                    onProgress(gap.id, "Committing changes made by agent...");
+                    const commitMsg = `Implement gap #${gap.id}: ${gap.requirement.substring(0, 60)}`;
+                    await commitAndPush(branchName, commitMsg, log);
+                    const summary = `Applied ${changedFiles.length} file change(s) to branch ${branchName}: ${changedFiles.join(", ")}`;
+                    log(`✔ Gap #${gap.id} completed successfully`);
+                    onComplete(gap.id, true, summary);
+                    results.push({ id: gap.id, success: true, summary });
+                    continue;
+                }
                 log("✘ No parseable file changes in agent response — marking as failed.");
                 log("Agent response (first 300 chars): " + responseContent.substring(0, 300));
                 const summary = "Agent responded but no file changes could be parsed. The model output did not follow the expected FILE: format.";

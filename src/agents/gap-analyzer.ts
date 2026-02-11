@@ -1,6 +1,8 @@
 import type { CopilotClient, MCPLocalServerConfig, MCPRemoteServerConfig } from "@github/copilot-sdk";
 import { createAgentSession } from "./session-helpers.js";
 
+const REPO_PATH = `/Users/${process.env.USER || "danielmeppiel"}/Repos/corporate-website`;
+
 export interface GapItem {
     id: number;
     requirement: string;
@@ -105,6 +107,7 @@ export async function extractMeetingRequirements(
         const meetingSession = await createAgentSession(client, {
             model: "gpt-5.2-codex",
             mcpServers: options.workiqMcp,
+            workingDirectory: REPO_PATH,
             systemMessage: {
                 content: `You are a meeting analyst. Your ONLY purpose: retrieve meeting data from Microsoft 365 using WorkIQ tools.
 
@@ -253,6 +256,7 @@ export async function analyzeSelectedGaps(
             const session = await createAgentSession(client, {
                 model: "claude-opus-4.5",
                 mcpServers: options.githubMcp,
+                workingDirectory: REPO_PATH,
                 systemMessage: {
                     content: `You are a senior software architect performing gap analysis on the GitHub repository "danielmeppiel/corporate-website".
 

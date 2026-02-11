@@ -10,6 +10,7 @@ const execAsync = promisify(exec);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../..');
+const REPO_PATH = `/Users/${process.env.USER || "danielmeppiel"}/Repos/corporate-website`;
 
 interface ValidationResult {
     requirementIndex: number;
@@ -633,6 +634,7 @@ async function evaluateSingleRequirement(
     const session = await createAgentSession(client, {
         model: "claude-opus-4.6",
         mcpServers: {},
+        workingDirectory: REPO_PATH,
         systemMessage: {
             content: `You are an EXTREMELY strict, adversarial QA tester. Your ONLY job is to determine whether ONE specific website requirement is met, based on real browser evidence collected by Playwright.
 
