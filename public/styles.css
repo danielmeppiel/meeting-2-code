@@ -434,6 +434,14 @@ body {
     line-height: 1.7;
 }
 
+.hero-tagline {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    margin-top: var(--space-sm);
+}
+
 .hero-features {
     display: flex;
     gap: var(--space-md);
