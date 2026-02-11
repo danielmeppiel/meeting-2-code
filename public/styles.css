@@ -363,7 +363,7 @@ body {
 .panel {
     display: none;
     flex: 1;
-    padding: var(--space-3xl) var(--space-2xl);
+    padding: 36px var(--space-2xl);
     max-width: 1400px;
     width: 100%;
     margin: 0 auto;
@@ -386,8 +386,8 @@ body {
     flex-direction: column;
     align-items: center;
     text-align: center;
-    padding: var(--space-4xl) 0;
-    gap: var(--space-xl);
+    padding: var(--space-2xl) 0 var(--space-xl);
+    gap: var(--space-lg);
 }
 
 .hero-badge {
