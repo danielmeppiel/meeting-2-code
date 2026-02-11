@@ -201,6 +201,25 @@ body {
     opacity: 0.7;
 }
 
+/* Clickable steps */
+.step[data-step] {
+    cursor: pointer;
+    user-select: none;
+}
+
+.step[data-step]:hover {
+    opacity: 0.9;
+}
+
+.step[data-step]:hover .step-indicator {
+    transform: scale(1.12);
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.08);
+}
+
+.step[data-step]:active .step-indicator {
+    transform: scale(0.95);
+}
+
 .step-indicator {
     width: 28px; height: 28px;
     border-radius: var(--radius-full);
@@ -2030,7 +2049,31 @@ body {
 }
 .qa-wf-step.active .qa-wf-step-icon {
     background: rgba(96, 165, 250, 0.15);
+    animation: qa-wf-pulse 1.8s ease-in-out infinite;
+    position: relative;
 }
+.qa-wf-step.active .qa-wf-step-icon::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--accent-blue, #60a5fa);
+    animation: spin 0.9s linear infinite;
+}
+.qa-wf-step.active span {
+    animation: qa-wf-text-pulse 2s ease-in-out infinite;
+}
+
+@keyframes qa-wf-pulse {
+    0%, 100% { background: rgba(96, 165, 250, 0.15); }
+    50%      { background: rgba(96, 165, 250, 0.30); }
+}
+@keyframes qa-wf-text-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.6; }
+}
+
 .qa-wf-step.done .qa-wf-step-icon {
     background: rgba(52, 211, 153, 0.15);
 }
@@ -2042,6 +2085,29 @@ body {
     height: 2px;
     background: var(--border, #333);
     margin: 0 0.5rem;
+    position: relative;
+    overflow: hidden;
+}
+.qa-wf-step.active ~ .qa-wf-connector,
+.qa-wf-step.active + .qa-wf-connector {
+    background: var(--border, #333);
+}
+.qa-wf-step.done + .qa-wf-connector {
+    background: var(--accent-emerald, #34d399);
+}
+.qa-wf-step.active + .qa-wf-connector::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent-blue, #60a5fa), transparent);
+    animation: qa-wf-flow 1.5s ease-in-out infinite;
+}
+@keyframes qa-wf-flow {
+    0%   { left: -100%; }
+    100% { left: 100%; }
 }
 .qa-workflow-log-details summary {
     cursor: pointer;
@@ -2069,4 +2135,179 @@ body {
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Agent Identity System
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+.agent-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 6px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    animation: fadeSlideIn 0.4s var(--ease-out);
+}
+
+.agent-badge .agent-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    flex-shrink: 0;
+}
+
+.agent-badge .agent-name {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.agent-badge .agent-role {
+    font-weight: 400;
+    opacity: 0.7;
+}
+
+/* Agent: Extractor — Requirements */
+.agent-badge--extractor {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: #818cf8;
+}
+.agent-badge--extractor .agent-avatar {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+}
+
+/* Agent: Analyzer — Gap Analysis */
+.agent-badge--analyzer {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    color: #fbbf24;
+}
+.agent-badge--analyzer .agent-avatar {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fcd34d;
+}
+
+/* Agent: Builder — Build */
+.agent-badge--builder {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: #34d399;
+}
+.agent-badge--builder .agent-avatar {
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+}
+
+/* Agent: Deployer — Deploy */
+.agent-badge--deployer {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    color: #60a5fa;
+}
+.agent-badge--deployer .agent-avatar {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+/* Agent: Validator — QA */
+.agent-badge--validator {
+    background: rgba(236, 72, 153, 0.1);
+    border: 1px solid rgba(236, 72, 153, 0.25);
+    color: #f472b6;
+}
+.agent-badge--validator .agent-avatar {
+    background: rgba(236, 72, 153, 0.2);
+    color: #f9a8d4;
+}
+
+/* Agent badge in the live header */
+.live-header .agent-badge {
+    margin-left: auto;
+}
+
+/* Agent context bar — shown below the live-header */
+.agent-context-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-md);
+    margin-bottom: var(--space-xs);
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    opacity: 0;
+    transition: opacity 0.3s var(--ease-out);
+}
+.agent-context-bar.visible {
+    opacity: 1;
+}
+.agent-context-bar .agent-says {
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+/* Loading step agent label */
+.loading-step .step-agent-tag {
+    margin-left: auto;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.45;
+    white-space: nowrap;
+}
+.loading-step.active .step-agent-tag,
+.loading-step.done .step-agent-tag {
+    opacity: 0.7;
+}
+
+/* Meeting card agent attribution */
+.meeting-card-agent {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-top: calc(-1 * var(--space-sm));
+}
+.meeting-card-agent .agent-badge {
+    animation: none;
+}
+
+/* Stepper agent labels */
+.step-label .step-agent-name {
+    display: block;
+    font-size: 0.55rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    opacity: 0.5;
+    margin-top: 1px;
+}
+
+/* Issue creation agent header */
+.creation-agent-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-sm);
+}
+
+/* QA workflow agent labels */
+.qa-wf-step .qa-wf-agent-tag {
+    display: block;
+    font-size: 0.6rem;
+    font-weight: 500;
+    opacity: 0.5;
+    margin-top: 2px;
 }

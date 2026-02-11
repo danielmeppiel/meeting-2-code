@@ -278,6 +278,7 @@ app.post("/api/validate", async (req, res) => {
         const results = await validateDeployment({
             url,
             requirements: lastRequirements,
+            client,
             onProgress: (current, total, message) => sendEvent("progress", { current, total, message }),
             onResult: (result) => sendEvent("result", { result }),
             onLog: (message) => sendEvent("log", { message }),
@@ -301,7 +302,10 @@ app.post("/api/validate", async (req, res) => {
 app.post("/api/execute-local-agent", async (req, res) => {
     const { gapIds } = req.body as { gapIds: number[] };
 
+    console.log("[execute-local-agent] Received gapIds:", JSON.stringify(gapIds));
+
     if (!gapIds?.length) {
+        console.error("[execute-local-agent] Empty gapIds. req.body:", JSON.stringify(req.body));
         return res.status(400).json({ success: false, error: "No gaps provided" });
     }
 

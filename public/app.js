@@ -80,6 +80,29 @@ function appendLog(containerId, message) {
     container.scrollTop = container.scrollHeight;
 }
 
+// ─── Agent Identity ─────────────────────────────────────────────────────────────
+const AGENTS = {
+    extractor: { name: 'Extractor', role: 'Requirements Agent', letter: 'E', class: 'extractor' },
+    analyzer:  { name: 'Analyzer',  role: 'Gap Analysis Agent', letter: 'A', class: 'analyzer' },
+    builder:   { name: 'Builder',   role: 'Build Agent',        letter: 'B', class: 'builder' },
+    deployer:  { name: 'Deployer',  role: 'Deploy Agent',       letter: 'D', class: 'deployer' },
+    validator: { name: 'Validator', role: 'QA Agent',           letter: 'V', class: 'validator' },
+};
+
+function setActiveAgent(agentKey) {
+    const agent = AGENTS[agentKey];
+    if (!agent) return;
+    const badge = document.getElementById('activeAgentBadge');
+    if (badge) {
+        badge.className = `agent-badge agent-badge--${agent.class}`;
+        badge.innerHTML = `
+            <span class="agent-avatar">${agent.letter}</span>
+            <span class="agent-name">${agent.name}</span>
+            <span class="agent-role">${agent.role}</span>
+        `;
+    }
+}
+
 // ─── Toast Notifications ──────────────────────────────────────────────────────
 function showToast(message, type = 'error') {
     const existing = document.querySelector('.toast');
@@ -171,6 +194,7 @@ async function startAnalysis() {
     document.getElementById('colCheckHeader').style.display = 'none';
     document.getElementById('btnAnalyzeGaps').style.display = '';
     document.getElementById('btnCreateIssues').style.display = 'none';
+    document.getElementById('btnAnalyzeSkipped').style.display = 'none';
 
     // Reset epic link
     document.getElementById('epicLink').style.display = 'none';
@@ -184,11 +208,12 @@ async function startAnalysis() {
     meetingCard.style.display = 'flex';
     meetingCard.classList.remove('found');
     document.getElementById('meetingCardIcon').className = 'meeting-card-icon';
-    document.getElementById('meetingCardTitle').textContent = 'Connecting to WorkIQ...';
+    document.getElementById('meetingCardTitle').textContent = 'Extractor is connecting to WorkIQ...';
     document.getElementById('meetingCardDate').textContent = '';
     document.getElementById('meetingCardParticipants').style.display = 'none';
+    document.getElementById('meetingCardAgent').style.display = 'none';
     document.getElementById('meetingCardStatusRow').style.display = 'flex';
-    document.getElementById('meetingCardStatus').textContent = 'Initializing session...';
+    document.getElementById('meetingCardStatus').textContent = 'Extractor is initializing...';
 
     // Reset agent log
     document.getElementById('agentLogEntries').innerHTML = '';
@@ -211,15 +236,16 @@ async function startAnalysis() {
                 const cardTitle = document.getElementById('meetingCardTitle');
                 const cardStatus = document.getElementById('meetingCardStatus');
                 if (step === 0) {
-                    cardTitle.textContent = 'Searching for meeting...';
+                    cardTitle.textContent = 'Extractor is searching for meeting...';
                     cardStatus.textContent = 'Connected to WorkIQ';
+                    setActiveAgent('extractor');
                 } else if (step === 1) {
-                    cardTitle.textContent = 'Meeting found';
+                    cardTitle.textContent = 'Meeting Found by Extractor';
                     cardStatus.textContent = 'Fetching meeting data...';
                 } else if (step === 2) {
-                    cardStatus.textContent = 'Extracting requirements...';
+                    cardStatus.textContent = 'Extractor is extracting requirements...';
                 } else if (step === 3) {
-                    cardStatus.textContent = 'Creating epic issue...';
+                    cardStatus.textContent = 'Extractor is creating epic issue...';
                 }
             });
 
@@ -231,7 +257,7 @@ async function startAnalysis() {
                 const iconEl = document.getElementById('meetingCardIcon');
                 iconEl.className = 'meeting-card-icon found';
                 iconEl.innerHTML = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-                document.getElementById('meetingCardTitle').textContent = 'Meeting Found';
+                document.getElementById('meetingCardTitle').textContent = 'Meeting Found by Extractor';
                 if (info.date) {
                     document.getElementById('meetingCardDate').textContent = info.date;
                 }
@@ -244,9 +270,12 @@ async function startAnalysis() {
                     el.style.display = 'flex';
                     el.innerHTML = info.participants.map(p => `<span class="participant-chip">${escapeHtml(p)}</span>`).join('');
                 }
+                // Show agent attribution
+                const agentAttr = document.getElementById('meetingCardAgent');
+                if (agentAttr) agentAttr.style.display = 'flex';
                 document.getElementById('meetingCardStatus').textContent = info.requirementCount
-                    ? `Extracting ${info.requirementCount} requirements...`
-                    : 'Extracting requirements...';
+                    ? `Extractor processing ${info.requirementCount} requirements...`
+                    : 'Extractor processing requirements...';
             });
 
             eventSource.addEventListener('requirements', (e) => {
@@ -415,8 +444,9 @@ async function startGapAnalysis() {
     analysisPhase = 'analyzing';
     const btn = document.getElementById('btnAnalyzeGaps');
     btn.disabled = true;
-    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Analyzing ${selectedIndices.length}...`;
-    setStatus('Analyzing Gaps...', 'processing');
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Analyzer processing ${selectedIndices.length}...`;
+    setStatus('Analyzer Running...', 'processing');
+    setActiveAgent('analyzer');
 
     // Mark selected rows as "Queued", non-selected as "Skipped"
     document.querySelectorAll('.unified-row').forEach((row, i) => {
@@ -507,6 +537,7 @@ async function startGapAnalysis() {
         document.getElementById('btnAnalyzeGaps').style.display = 'none';
         document.getElementById('btnCreateIssues').style.display = '';
         revealCheckboxesForIssues();
+        showAnalyzeSkippedButton();
 
     } catch (error) {
         showToast(error.message);
@@ -521,6 +552,132 @@ async function startGapAnalysis() {
         `;
         // Re-enable checkboxes
         document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => { cb.disabled = false; });
+    }
+}
+
+// ─── Show "Analyze Skipped" button if there are unanlayzed requirements ──────
+
+function showAnalyzeSkippedButton() {
+    const skippedIndices = getSkippedIndices();
+    const btn = document.getElementById('btnAnalyzeSkipped');
+    if (skippedIndices.length > 0) {
+        btn.style.display = '';
+        document.getElementById('skippedCount').textContent = skippedIndices.length;
+    } else {
+        btn.style.display = 'none';
+    }
+}
+
+function getSkippedIndices() {
+    const indices = [];
+    document.querySelectorAll('.unified-row').forEach((row, i) => {
+        const statusChip = row.querySelector('.col-status .status-chip');
+        if (statusChip && statusChip.textContent.trim() === 'Skipped') {
+            indices.push(i);
+        }
+    });
+    return indices;
+}
+
+async function analyzeSkipped() {
+    const skippedIndices = getSkippedIndices();
+    if (skippedIndices.length === 0) {
+        showToast('No skipped requirements to analyze.');
+        return;
+    }
+
+    const btn = document.getElementById('btnAnalyzeSkipped');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Analyzer processing ${skippedIndices.length}...`;
+    setStatus('Analyzer processing skipped...', 'processing');
+    setActiveAgent('analyzer');
+
+    // Mark skipped rows as queued
+    skippedIndices.forEach(i => {
+        const row = document.getElementById(`unified-row-${i}`);
+        if (!row) return;
+        const statusCell = row.querySelector('.col-status');
+        statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Queued</span>`;
+        row.classList.remove('no-gap-row');
+    });
+
+    try {
+        const response = await fetch('/api/analyze-gaps', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selectedIndices: skippedIndices }),
+        });
+
+        if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error || 'Gap analysis failed');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+
+            const chunks = buffer.split('\n\n');
+            buffer = chunks.pop();
+
+            for (const chunk of chunks) {
+                if (!chunk.trim()) continue;
+                const lines = chunk.split('\n');
+                let eventType = '';
+                let eventData = '';
+                for (const line of lines) {
+                    if (line.startsWith('event: ')) eventType = line.slice(7);
+                    if (line.startsWith('data: ')) eventData = line.slice(6);
+                }
+                if (!eventType || !eventData) continue;
+
+                if (eventType === 'gap-started') {
+                    const { id } = JSON.parse(eventData);
+                    markRowAnalyzing(id);
+                } else if (eventType === 'gap') {
+                    const { gap } = JSON.parse(eventData);
+                    gap.hasGap = !isNoGap(gap);
+                    gaps.push(gap);
+                    enrichRowWithGap(gap);
+                    document.getElementById('gapAnalyzedCount').textContent = gaps.length;
+                    if (qaMode) { try { buildQAGapTable(); } catch(_){} }
+                } else if (eventType === 'log') {
+                    const { message } = JSON.parse(eventData);
+                    appendLog('agentLogEntries', message);
+                } else if (eventType === 'error') {
+                    const { error } = JSON.parse(eventData);
+                    throw new Error(error);
+                }
+            }
+        }
+
+        // Update summary
+        const actionableGaps = gaps.filter(g => g.hasGap).length;
+        const noGapCount = gaps.length - actionableGaps;
+        setStatus(`${actionableGaps} Gaps / ${noGapCount} Met`, '');
+
+        // Re-run checkbox reveal for newly analyzed rows
+        revealCheckboxesForIssues();
+        showAnalyzeSkippedButton();
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Error analyzing skipped', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            Analyze Skipped
+            <span class="btn-badge" id="skippedCount">${getSkippedIndices().length}</span>
+        `;
+        if (getSkippedIndices().length === 0) {
+            btn.style.display = 'none';
+        }
     }
 }
 
@@ -805,7 +962,7 @@ async function dispatchSelected() {
     const dispatchLabel = [cloudLabel, localLabel].filter(Boolean).join(' + ');
     btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Dispatching ${dispatchLabel}...`;
 
-    setStatus('Dispatching Agents...', 'processing');
+    setStatus('Builder Dispatching...', 'processing');
     setStep(3);
 
     // Update status on unified table rows to "Dispatching"
@@ -830,19 +987,40 @@ async function dispatchSelected() {
 
     try {
         const promises = [];
+        const promiseLabels = [];
 
         // Cloud path: create issues first, then assign coding agent
         if (cloudGaps.length > 0) {
             promises.push(dispatchCloudFromGaps(cloudGaps));
+            promiseLabels.push('cloud');
         }
 
         // Local path: dispatch directly via Copilot SDK
         if (localGaps.length > 0) {
             promises.push(dispatchLocalFromGaps(localGaps));
+            promiseLabels.push('local');
         }
 
-        const results = await Promise.all(promises);
-        allResults = results.flat();
+        // Use allSettled so one failure doesn't abort the other
+        const settled = await Promise.allSettled(promises);
+        const errors = [];
+        settled.forEach((result, i) => {
+            if (result.status === 'fulfilled') {
+                allResults.push(...result.value);
+            } else {
+                const label = promiseLabels[i] || 'unknown';
+                const errMsg = result.reason?.message || 'Unknown error';
+                errors.push(`${label}: ${errMsg}`);
+                appendLog('issueLogEntries', `❌ ${label} dispatch failed: ${errMsg}`);
+            }
+        });
+
+        if (allResults.length === 0 && errors.length > 0) {
+            throw new Error(errors.join('; '));
+        }
+        if (errors.length > 0) {
+            showToast(`Partial failure: ${errors.join('; ')}`, 'warning');
+        }
 
         // Update unified table rows with results
         allResults.forEach(result => {
@@ -862,6 +1040,7 @@ async function dispatchSelected() {
         setStatus('Agents Dispatched', '');
         renderCompletion(allResults);
         showPanel('panel-complete');
+        setActiveAgent('builder');
 
     } catch (error) {
         showToast(error.message);
@@ -882,6 +1061,7 @@ async function dispatchSelected() {
 async function dispatchCloudFromGaps(cloudGaps) {
     const selectedIds = cloudGaps.map(g => g.id);
     appendLog('issueLogEntries', `☁️ Creating ${selectedIds.length} issue(s) on GitHub...`);
+    appendLog('issueLogEntries', `🤖 Agent: Builder`);
 
     // Step 1: Create issues
     const response = await fetch('/api/create-issues', {
@@ -937,6 +1117,7 @@ async function dispatchCloudFromGaps(cloudGaps) {
     // Step 2: Assign coding agent
     const issueNumbers = newIssues.map(i => i.number).filter(n => n > 0);
     appendLog('issueLogEntries', `☁️ Assigning ${issueNumbers.length} issue(s) to GitHub Copilot Coding Agent...`);
+    appendLog('issueLogEntries', `🤖 Handoff: Builder → Copilot Coding Agent`);
 
     const assignResp = await fetch('/api/assign-coding-agent', {
         method: 'POST',
@@ -993,6 +1174,7 @@ async function dispatchCloudFromGaps(cloudGaps) {
 async function dispatchLocalFromGaps(localGaps) {
     const gapIds = localGaps.map(g => g.id);
     appendLog('issueLogEntries', `💻 Dispatching ${gapIds.length} gap(s) to local Copilot SDK agent...`);
+    appendLog('issueLogEntries', `🤖 Agent: Builder → Local mode`);
 
     const response = await fetch('/api/execute-local-agent', {
         method: 'POST',
@@ -1160,8 +1342,7 @@ function buildQAGapTable() {
     let summaryParts = [`${totalReqs} requirements`];
     if (gaps.length > 0) summaryParts.push(`${gapCount} gaps`);
     if (metCount > 0) summaryParts.push(`${metCount} met`);
-    document.getElementById('qaGapSummary').innerHTML =
-        `<span id="qaReqTotal">${totalReqs}</span> ` + escapeHtml(summaryParts.join(' \u00b7 '));
+    document.getElementById('qaGapSummary').textContent = summaryParts.join(' \u00b7 ');
 
     const validationMap = {};
     validationResults.forEach(v => {
@@ -1224,15 +1405,19 @@ function buildQAGapTable() {
 async function launchQAWorkflow() {
     const btn = document.getElementById('btnLaunchQA');
     btn.disabled = true;
-    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Deploying...`;
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Deployer running...`;
 
-    setStatus('Deploying to QA...', 'processing');
+    setStatus('Deployer running...', 'processing');
     setQAStep('deploy');
     validationResults = [];
 
     const progressEl = document.getElementById('qaWorkflowProgress');
     progressEl.style.display = '';
     document.getElementById('qaWorkflowLogEntries').innerHTML = '';
+
+    // Auto-open the agent activity log so users see live progress
+    const logDetails = progressEl.querySelector('.qa-workflow-log-details');
+    if (logDetails) logDetails.open = true;
 
     const wfDeploy = document.getElementById('qaWfDeploy');
     const wfValidate = document.getElementById('qaWfValidate');
@@ -1241,6 +1426,7 @@ async function launchQAWorkflow() {
     wfValidate.classList.remove('active', 'done', 'failed');
 
     buildQAGapTable();
+    appendLog('qaWorkflowLogEntries', `🤖 Agent: Deployer starting...`);
 
     try {
         const deployUrl = await runDeploy();
@@ -1257,9 +1443,10 @@ async function launchQAWorkflow() {
         wfDeploy.classList.add('done');
         wfValidate.classList.add('active');
 
-        btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Validating...`;
-        setStatus('Validating...', 'processing');
+        btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Validator running...`;
+        setStatus('Validator running...', 'processing');
         setQAStep('validate');
+        appendLog('qaWorkflowLogEntries', `🤖 Handoff: Deployer → Validator`);
 
         await runValidation(deployUrl);
 
@@ -1268,10 +1455,13 @@ async function launchQAWorkflow() {
 
         const passed = validationResults.filter(v => v.passed).length;
         const total = validationResults.length;
+        const failed = total - passed;
         if (passed === total && total > 0) {
-            setStatus(`${total}/${total} Validated`, '');
+            setStatus(`Validator: All ${total} Passed — Ship it!`, '');
+            appendLog('qaWorkflowLogEntries', `\u2705 Validator complete: ${passed}/${total} passed. All meeting requirements met.`);
         } else {
-            setStatus(`${passed}/${total} Validated`, 'warning');
+            setStatus(`Validator: ${failed} of ${total} Failed`, 'error');
+            appendLog('qaWorkflowLogEntries', `\u274C Validator report: ${passed} passed, ${failed} failed out of ${total}. Not ready to ship.`);
         }
         setQAStep('complete');
     } catch (error) {
@@ -1428,9 +1618,47 @@ function updateQATableRowWithValidation(result) {
     let summaryParts = [`${requirements.length} requirements`];
     if (gaps.length > 0) summaryParts.push(`${gapCount} gaps`);
     if (metCount > 0) summaryParts.push(`${metCount} met`);
-    if (validationResults.length > 0) summaryParts.push(`${passed} pass \u00b7 ${failed} fail`);
-    document.getElementById('qaGapSummary').innerHTML =
-        `<span id="qaReqTotal">${requirements.length}</span> ` + escapeHtml(summaryParts.join(' \u00b7 '));
+    if (validationResults.length > 0) {
+        summaryParts.push(`${passed} pass \u00b7 ${failed} fail`);
+        if (failed > 0) {
+            summaryParts.push('\u274C Not ready to ship');
+        } else if (passed > 0 && passed === validationResults.length) {
+            summaryParts.push('\u2705 Ready to ship');
+        }
+    }
+    document.getElementById('qaGapSummary').textContent = summaryParts.join(' \u00b7 ');
+}
+
+// ─── Clickable Step Navigation ────────────────────────────────────────────────
+function navigateToStep(stepKey) {
+    // stepKey is: '1' (Analyze), '2' (Review Gaps), '3' (Dispatch/Builder),
+    //             'qa-deploy' or 'qa-validate' (QA track), '4' (Complete)
+
+    if (stepKey === '1') {
+        // If we've started analysis, show the loading/gap panel; otherwise landing
+        if (analysisPhase !== 'idle') {
+            showPanel('panel-loading');
+        } else {
+            showPanel('panel-analyze');
+        }
+    } else if (stepKey === '2') {
+        // Gap review table lives in panel-loading
+        if (analysisPhase !== 'idle') {
+            showPanel('panel-loading');
+        }
+    } else if (stepKey === '3') {
+        // Dispatch / Issues
+        showPanel('panel-issues');
+    } else if (stepKey === 'qa-deploy' || stepKey === 'qa-validate') {
+        // Switch into QA mode and show QA panel
+        if (!qaMode) {
+            toggleQAMode();
+        } else {
+            showPanel('panel-qa');
+        }
+    } else if (stepKey === '4') {
+        showPanel('panel-complete');
+    }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -1438,4 +1666,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setStep(1);
     showPanel('panel-analyze');
     updateQAFabVisibility();
+
+    // Make all stepper steps clickable
+    document.querySelectorAll('.stepper .step[data-step]').forEach(stepEl => {
+        stepEl.addEventListener('click', () => {
+            const key = stepEl.dataset.step;
+            navigateToStep(key);
+        });
+    });
 });

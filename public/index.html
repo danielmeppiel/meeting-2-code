@@ -37,7 +37,7 @@
                             <span class="step-number">1</span>
                             <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         </div>
-                        <span class="step-label">Analyze</span>
+                        <span class="step-label">Analyze<span class="step-agent-name" style="color: #818cf8;">Extractor</span></span>
                     </div>
                     <div class="step-connector"></div>
                     <div class="step" data-step="2">
@@ -45,7 +45,7 @@
                             <span class="step-number">2</span>
                             <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         </div>
-                        <span class="step-label">Review Gaps</span>
+                        <span class="step-label">Review Gaps<span class="step-agent-name" style="color: #fbbf24;">Analyzer</span></span>
                     </div>
 
                     <!-- Fork: two parallel tracks -->
@@ -60,7 +60,7 @@
                                         <span class="step-number">3</span>
                                         <svg class="step-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
                                     </div>
-                                    <span class="step-label">Dispatch</span>
+                                    <span class="step-label">Dispatch<span class="step-agent-name" style="color: #34d399;">Builder</span></span>
                                 </div>
                             </div>
                             <!-- QA track -->
@@ -70,14 +70,14 @@
                                     <div class="step-indicator step-indicator--qa">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
                                     </div>
-                                    <span class="step-label">Deploy</span>
+                                    <span class="step-label">Deploy<span class="step-agent-name" style="color: #60a5fa;">Deployer</span></span>
                                 </div>
                                 <div class="step-connector"></div>
                                 <div class="step" data-step="qa-validate">
                                     <div class="step-indicator step-indicator--qa">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
                                     </div>
-                                    <span class="step-label">Validate</span>
+                                    <span class="step-label">Validate<span class="step-agent-name" style="color: #f472b6;">Validator</span></span>
                                 </div>
                             </div>
                         </div>
@@ -104,7 +104,7 @@
                         <span class="gradient-text">The Agentic SDLC</span>
                     </h1>
                     <p class="hero-subtitle">
-                        WorkIQ extracts requirements from your meetings. GitHub Copilot agents write the code. Azure deploys it — automatically. The entire software development lifecycle, powered by agents.
+                        Five AI agents form your software team. <strong>Extractor</strong> pulls requirements from meetings. <strong>Analyzer</strong> finds gaps. <strong>Builder</strong> dispatches code. <strong>Deployer</strong> ships to Azure. <strong>Validator</strong> verifies. The entire SDLC, powered by agents.
                     </p>
                     <button class="btn btn-primary btn-xl" id="btnAnalyze" onclick="startAnalysis()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -139,6 +139,11 @@
                                 <span class="live-dot"></span>
                                 <span>Live Analysis</span>
                             </div>
+                            <span class="agent-badge agent-badge--extractor" id="activeAgentBadge">
+                                <span class="agent-avatar">E</span>
+                                <span class="agent-name">Extractor</span>
+                                <span class="agent-role">Requirements Agent</span>
+                            </span>
                         </div>
 
                         <!-- Progress Steps -->
@@ -146,22 +151,27 @@
                             <div class="loading-step" id="ls-fetch">
                                 <div class="loading-step-icon"></div>
                                 <span>Connecting to WorkIQ MCP</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
                             </div>
                             <div class="loading-step" id="ls-extract">
                                 <div class="loading-step-icon"></div>
                                 <span>Fetching meeting data</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
                             </div>
                             <div class="loading-step" id="ls-requirements">
                                 <div class="loading-step-icon"></div>
                                 <span>Extracting requirements</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
                             </div>
                             <div class="loading-step" id="ls-analyze">
                                 <div class="loading-step-icon"></div>
                                 <span>Creating epic issue</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
                             </div>
                             <div class="loading-step" id="ls-complexity">
                                 <div class="loading-step-icon"></div>
                                 <span>Analyzing selected gaps</span>
+                                <span class="step-agent-tag" style="color: #fbbf24;">Analyzer</span>
                             </div>
                         </div>
 
@@ -183,12 +193,19 @@
                                     <line x1="3" y1="10" x2="21" y2="10"/>
                                 </svg>
                             </div>
-                            <h3 class="meeting-card-title" id="meetingCardTitle">Connecting to WorkIQ...</h3>
+                            <h3 class="meeting-card-title" id="meetingCardTitle">Extractor is connecting to WorkIQ...</h3>
                             <p class="meeting-card-date" id="meetingCardDate"></p>
+                            <div class="meeting-card-agent" id="meetingCardAgent" style="display:none;">
+                                <span class="agent-badge agent-badge--extractor">
+                                    <span class="agent-avatar">E</span>
+                                    <span class="agent-name">Extractor</span>
+                                    <span class="agent-role">found this meeting on WorkIQ</span>
+                                </span>
+                            </div>
                             <div class="meeting-card-participants" id="meetingCardParticipants" style="display:none;"></div>
                             <div class="meeting-card-status" id="meetingCardStatusRow">
                                 <div class="meeting-card-pulse"></div>
-                                <span id="meetingCardStatus">Initializing session...</span>
+                                <span id="meetingCardStatus">Extractor is initializing...</span>
                             </div>
                         </div>
 
@@ -215,6 +232,11 @@
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                                     Analyze Gaps for Selected
                                     <span class="btn-badge" id="analyzeCount">0</span>
+                                </button>
+                                <button class="btn btn-ghost" id="btnAnalyzeSkipped" onclick="analyzeSkipped()" style="display:none;">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                    Analyze Skipped
+                                    <span class="btn-badge" id="skippedCount">0</span>
                                 </button>
                                 <button class="btn btn-primary" id="btnCreateIssues" onclick="dispatchSelected()" style="display:none;" disabled>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -255,12 +277,20 @@
 
             <!-- Step 3: Issues Created -->
             <section class="panel" id="panel-issues">
+                <!-- Dispatch log (shared by cloud + local dispatch) -->
+                <div class="agent-log agent-log-compact" id="issueLog" style="display:none;">
+                    <div class="agent-log-entries" id="issueLogEntries"></div>
+                </div>
+
                 <!-- Progress header (visible during creation) -->
                 <div id="issueCreationProgress">
                     <div class="creation-progress-header">
-                        <!-- Issue creation log -->
-                        <div class="agent-log agent-log-compact" id="issueLog" style="display:none;">
-                            <div class="agent-log-entries" id="issueLogEntries"></div>
+                        <div class="creation-agent-header">
+                            <span class="agent-badge agent-badge--builder">
+                                <span class="agent-avatar">B</span>
+                                <span class="agent-name">Builder</span>
+                                <span class="agent-role">Build Agent</span>
+                            </span>
                         </div>
                         <div class="creation-progress-text">
                             <span class="live-indicator">
@@ -348,9 +378,9 @@
                             <polyline points="22 4 12 14.01 9 11.01"/>
                         </svg>
                     </div>
-                    <h2 class="complete-title">All Tasks Deployed!</h2>
+                    <h2 class="complete-title">All Agents Completed!</h2>
                     <p class="complete-subtitle">
-                        Copilot Coding Agent has been assigned to all created issues.<br>
+                        <strong>Builder</strong> dispatched all tasks to Copilot Coding Agent.<br>
                         The agent will begin working on implementations automatically.
                     </p>
                     <div class="complete-stats" id="completeStats">
@@ -404,6 +434,7 @@
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
                                 </div>
                                 <span>Deploying</span>
+                                <span class="qa-wf-agent-tag" style="color: #60a5fa;">Deployer</span>
                             </div>
                             <div class="qa-wf-connector"></div>
                             <div class="qa-wf-step" id="qaWfValidate">
@@ -411,6 +442,7 @@
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
                                 </div>
                                 <span>Validating</span>
+                                <span class="qa-wf-agent-tag" style="color: #f472b6;">Validator</span>
                             </div>
                         </div>
                         <details class="qa-workflow-log-details">
