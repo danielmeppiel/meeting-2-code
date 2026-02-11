@@ -1413,8 +1413,9 @@ async function dispatchCloudFromGaps(cloudGaps) {
             }
             if (!eventType || !eventData) continue;
 
-            if (eventType === 'assignment') {
-                const result = JSON.parse(eventData);
+            if (eventType === 'result' || eventType === 'assignment') {
+                const parsed = JSON.parse(eventData);
+                const result = parsed.result || parsed;
                 const gapId = issueToGap[result.issueNumber] || result.issueNumber;
                 results.push({ gapId, issueNumber: result.issueNumber, assigned: result.assigned, message: result.message });
 
@@ -1648,6 +1649,7 @@ function buildQAGapTable() {
     requirements.forEach((req, i) => {
         const tr = document.createElement('tr');
         tr.id = `qa-row-${i}`;
+        tr.dataset.index = i;
 
         const gap = gaps.find(g => g.id === i + 1);
         const vr = validationMap[req.trim()];
@@ -1683,6 +1685,56 @@ function buildQAGapTable() {
             <td>${complexityHtml}</td>
         `;
         tbody.appendChild(tr);
+
+        // Build expandable detail row with gap/validation info
+        const hasDetail = (gap && (gap.gap || gap.details)) || vr;
+        if (hasDetail) {
+            const detailTr = document.createElement('tr');
+            detailTr.id = `qa-detail-${i}`;
+            detailTr.className = 'row-details-expandable';
+
+            let detailContent = '';
+            if (gap && gap.gap) {
+                detailContent += `
+                    <div class="detail-item">
+                        <span class="detail-label">Gap</span>
+                        <span class="detail-value">${escapeHtml(gap.gap)}</span>
+                    </div>`;
+            }
+            if (gap && gap.details) {
+                detailContent += `
+                    <div class="detail-item detail-item-full">
+                        <span class="detail-label">Implementation Details</span>
+                        <span class="detail-value">${escapeHtml(gap.details)}</span>
+                    </div>`;
+            }
+            if (vr) {
+                detailContent += `
+                    <div class="detail-item detail-item-full">
+                        <span class="detail-label">Validation Result</span>
+                        <span class="detail-value">${escapeHtml(vr.evidence || vr.message || (vr.passed ? 'Passed' : 'Failed'))}</span>
+                    </div>`;
+            }
+
+            detailTr.innerHTML = `
+                <td colspan="3">
+                    <div class="detail-grid" style="grid-template-columns: 1fr;">
+                        ${detailContent}
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(detailTr);
+
+            // Make requirement text clickable to toggle detail
+            const reqDiv = tr.querySelector('.td-requirement');
+            if (reqDiv) {
+                reqDiv.classList.add('expandable-req');
+                reqDiv.onclick = () => {
+                    detailTr.classList.toggle('show');
+                    reqDiv.classList.toggle('expanded');
+                };
+            }
+        }
     });
 
     const btn = document.getElementById('btnLaunchQA');
@@ -1861,7 +1913,10 @@ async function runValidation(url) {
                         if (line.startsWith('data: ')) eventData = line.slice(6);
                     }
                     if (!eventType || !eventData) continue;
-                    if (eventType === 'result') {
+                    if (eventType === 'validation-start') {
+                        const { requirementIndex, requirement } = JSON.parse(eventData);
+                        setQATableRowValidating(requirementIndex, requirement);
+                    } else if (eventType === 'result') {
                         const { result } = JSON.parse(eventData);
                         validationResults.push(result);
                         updateQATableRowWithValidation(result);
@@ -1879,6 +1934,24 @@ async function runValidation(url) {
     });
 }
 
+function setQATableRowValidating(reqIndex, requirement) {
+    // Try direct index first
+    let row = document.getElementById(`qa-row-${reqIndex}`);
+    // Fallback: match by requirement text
+    if (!row && requirement) {
+        const trimmed = requirement.trim();
+        const idx = requirements.findIndex(r => r.trim() === trimmed);
+        if (idx !== -1) row = document.getElementById(`qa-row-${idx}`);
+    }
+    if (!row) return;
+
+    const statusTd = row.querySelectorAll('td')[1];
+    if (!statusTd) return;
+
+    statusTd.innerHTML = '<span class="status-chip validating"><span class="validating-spinner"></span> Validating</span>';
+    row.classList.add('validating-row');
+}
+
 function updateQATableRowWithValidation(result) {
     const reqText = result.requirement.trim();
     let rowIdx = requirements.findIndex(r => r.trim() === reqText);
@@ -1893,6 +1966,8 @@ function updateQATableRowWithValidation(result) {
     const row = document.getElementById(`qa-row-${rowIdx}`);
     if (!row) return;
 
+    row.classList.remove('validating-row');
+
     const statusTd = row.querySelectorAll('td')[1];
     if (result.passed) {
         statusTd.innerHTML = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Pass</span>';
@@ -1902,6 +1977,51 @@ function updateQATableRowWithValidation(result) {
         statusTd.innerHTML = '<span class="status-chip gap-found"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Fail</span>';
         row.classList.remove('no-gap-row');
         row.classList.add('validation-fail-row');
+    }
+
+    // Update or create the expandable detail row with validation evidence
+    let detailRow = document.getElementById(`qa-detail-${rowIdx}`);
+    const evidence = result.evidence || result.message || (result.passed ? 'Passed' : 'Failed');
+    if (detailRow) {
+        // Append validation evidence to existing detail
+        const grid = detailRow.querySelector('.detail-grid');
+        if (grid) {
+            // Remove any previous validation detail
+            grid.querySelectorAll('.detail-item-validation').forEach(el => el.remove());
+            const item = document.createElement('div');
+            item.className = 'detail-item detail-item-full detail-item-validation';
+            item.innerHTML = `
+                <span class="detail-label">Validation Result</span>
+                <span class="detail-value">${escapeHtml(evidence)}</span>
+            `;
+            grid.appendChild(item);
+        }
+    } else {
+        // Create a new detail row for validation-only results
+        detailRow = document.createElement('tr');
+        detailRow.id = `qa-detail-${rowIdx}`;
+        detailRow.className = 'row-details-expandable';
+        detailRow.innerHTML = `
+            <td colspan="3">
+                <div class="detail-grid" style="grid-template-columns: 1fr;">
+                    <div class="detail-item detail-item-full detail-item-validation">
+                        <span class="detail-label">Validation Result</span>
+                        <span class="detail-value">${escapeHtml(evidence)}</span>
+                    </div>
+                </div>
+            </td>
+        `;
+        row.after(detailRow);
+
+        // Make requirement text clickable
+        const reqDiv = row.querySelector('.td-requirement');
+        if (reqDiv && !reqDiv.classList.contains('expandable-req')) {
+            reqDiv.classList.add('expandable-req');
+            reqDiv.onclick = () => {
+                detailRow.classList.toggle('show');
+                reqDiv.classList.toggle('expanded');
+            };
+        }
     }
 
     row.classList.add('row-enriched');

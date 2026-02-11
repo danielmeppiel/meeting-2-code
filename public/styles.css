@@ -1504,6 +1504,26 @@ body {
     border-color: rgba(148, 163, 184, 0.2);
 }
 
+.status-chip.validating {
+    background: rgba(99, 102, 241, 0.12);
+    color: rgb(129, 140, 248);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.validating-spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid rgba(129, 140, 248, 0.3);
+    border-top-color: rgb(129, 140, 248);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.validating-row {
+    background: rgba(99, 102, 241, 0.04);
+}
+
 .status-chip.assigned {
     background: rgba(168, 85, 247, 0.12);
     color: rgb(168, 85, 247);

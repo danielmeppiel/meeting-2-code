@@ -24,6 +24,7 @@ interface ValidateOptions {
     client: CopilotClient;
     onProgress?: (current: number, total: number, message: string) => void;
     onResult?: (result: ValidationResult) => void;
+    onStart?: (requirementIndex: number, requirement: string) => void;
     onLog?: (message: string) => void;
 }
 
@@ -762,6 +763,7 @@ async function evaluateRequirementsParallel(
     log: (msg: string) => void,
     onResult: (result: ValidationResult) => void,
     onProgress: (current: number, total: number, message: string) => void,
+    onStart: (requirementIndex: number, requirement: string) => void,
 ): Promise<ValidationResult[]> {
     const MAX_CONCURRENT = 4;
     const total = requirements.length;
@@ -782,6 +784,7 @@ async function evaluateRequirementsParallel(
                 const { req, i } = item;
 
                 log(`[Req ${i + 1}/${total}] Sub-agent starting: "${req.substring(0, 60)}..."`);
+                onStart(i, req);
                 const result = await evaluateSingleRequirement(client, audit, req, i, log);
                 results[i] = result;
                 completed++;
@@ -807,6 +810,7 @@ async function evaluateRequirementsParallel(
 export async function validateDeployment(options: ValidateOptions): Promise<ValidationResult[]> {
     const progress = options.onProgress ?? (() => {});
     const onResult = options.onResult ?? (() => {});
+    const onStart = options.onStart ?? (() => {});
     const log = options.onLog ?? (() => {});
 
     const total = options.requirements.length;
@@ -886,7 +890,7 @@ export async function validateDeployment(options: ValidateOptions): Promise<Vali
     log('Phase 2: Spawning dedicated sub-agent per requirement for adversarial evaluation...');
 
     const results = await evaluateRequirementsParallel(
-        options.client, audit, options.requirements, log, onResult, progress,
+        options.client, audit, options.requirements, log, onResult, progress, onStart,
     );
 
     const passed = results.filter(r => r.passed).length;

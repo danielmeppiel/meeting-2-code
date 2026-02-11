@@ -281,6 +281,7 @@ app.post("/api/validate", async (req, res) => {
             client,
             onProgress: (current, total, message) => sendEvent("progress", { current, total, message }),
             onResult: (result) => sendEvent("result", { result }),
+            onStart: (requirementIndex, requirement) => sendEvent("validation-start", { requirementIndex, requirement }),
             onLog: (message) => sendEvent("log", { message }),
         });
 

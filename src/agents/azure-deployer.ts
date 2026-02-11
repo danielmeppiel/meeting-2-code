@@ -274,26 +274,41 @@ export async function deployToAzure(options: DeployOptions): Promise<DeployResul
             progress(1, "Merging local agent changes...");
             const merged = await mergeLocalAgentBranches(log);
 
-            if (merged.length > 0) {
-                // Rebuild and redeploy with the merged changes
-                progress(2, "Redeploying with local agent changes...");
-                log("Running azd deploy to push updated code...");
-                try {
-                    await run("azd deploy --no-prompt 2>&1", log, 600_000);
-                    log("Redeployment complete with local changes.");
-                } catch (deployErr) {
-                    const msg = deployErr instanceof Error ? deployErr.message : String(deployErr);
-                    log(`azd deploy failed, falling back to azd up: ${msg.substring(0, 200)}`);
-                    await run("azd up --no-prompt 2>&1", log, 600_000);
+            // Also check for uncommitted local changes (from local agent filesystem edits).
+            // NOTE: This commit is LOCAL-ONLY (never pushed to origin).
+            // It gets discarded on server restart by resetCorpWebsiteRepo() which
+            // runs `git reset --hard origin/main`.
+            let hasLocalChanges = false;
+            try {
+                const { stdout: statusOut } = await execAsync("git status --porcelain", { cwd: REPO_PATH, timeout: 10_000 });
+                if (statusOut.trim()) {
+                    hasLocalChanges = true;
+                    log(`Found uncommitted local changes:\n${statusOut.trim().split("\n").slice(0, 10).join("\n")}`);
+                    await run('git add -A && git commit -m "Include local agent changes for deployment"', log, 15_000);
+                    log("Committed local changes for deployment.");
                 }
-                progress(4, "Redeployment complete!");
-            } else {
-                progress(4, "Deployment already active (no new local changes).");
+            } catch (commitErr) {
+                const msg = commitErr instanceof Error ? commitErr.message : String(commitErr);
+                log(`Warning: could not commit local changes — ${msg.substring(0, 200)}`);
             }
 
-            return { success: true, url: existingUrl, message: merged.length > 0
-                ? `Redeployed with ${merged.length} local change(s)`
-                : "App is already deployed on Azure" };
+            // Always redeploy when user explicitly triggers deploy (picks up merged branches + local changes)
+            progress(2, "Redeploying to Azure...");
+            log("Running azd deploy to push updated code...");
+            try {
+                await run("azd deploy --no-prompt 2>&1", log, 600_000);
+                log("Redeployment complete.");
+            } catch (deployErr) {
+                const msg = deployErr instanceof Error ? deployErr.message : String(deployErr);
+                log(`azd deploy failed, falling back to azd up: ${msg.substring(0, 200)}`);
+                await run("azd up --no-prompt 2>&1", log, 600_000);
+            }
+            progress(4, "Redeployment complete!");
+
+            const changeDesc = merged.length > 0 || hasLocalChanges
+                ? `Redeployed with ${merged.length} merged branch(es)${hasLocalChanges ? " + local changes" : ""}`
+                : "Redeployed to Azure";
+            return { success: true, url: existingUrl, message: changeDesc };
         }
 
         // ── Step 1: scaffold azure.yaml if missing ────────────────────────
