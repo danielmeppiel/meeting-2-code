@@ -8,7 +8,7 @@ import type { GapItem, MeetingInfo } from "./agents/gap-analyzer.js";
 import { createEpicIssue, linkSubIssuesToEpic } from "./agents/epic-issue.js";
 import { createGithubIssues } from "./agents/github-issues.js";
 import { assignCodingAgent } from "./agents/coding-agent.js";
-import { deployToAzure } from "./agents/azure-deployer.js";
+import { deployToAzure, resetCorpWebsiteRepo } from "./agents/azure-deployer.js";
 import { validateDeployment } from "./agents/playwright-validator.js";
 import { executeLocalAgent } from "./agents/local-agent.js";
 
@@ -350,6 +350,15 @@ app.post("/api/execute-local-agent", async (req, res) => {
 
 // ─── Start server ─────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`\n🚀 Meeting-2-Code running at http://localhost:${PORT}\n`);
+
+// Reset corporate-website repo to clean state on startup (demo reset)
+resetCorpWebsiteRepo().then(() => {
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Meeting-2-Code running at http://localhost:${PORT}\n`);
+    });
+}).catch((err) => {
+    console.warn("[startup] Repo reset warning:", err instanceof Error ? err.message : String(err));
+    app.listen(PORT, () => {
+        console.log(`\n🚀 Meeting-2-Code running at http://localhost:${PORT}\n`);
+    });
 });

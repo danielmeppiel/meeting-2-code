@@ -934,6 +934,10 @@ function updateSelectedCount() {
     selectAll.indeterminate = count > 0 && count < actionable.length;
 }
 
+// ─── Dispatch state ───────────────────────────────────────────────────────────
+let dispatchedGapIds = new Set(); // track which gap IDs have been dispatched
+let dispatchInProgress = false;
+
 // ─── Step 2: Dispatch Selected (unified: issue creation + agent dispatch) ─────
 async function dispatchSelected() {
     const selectedGaps = gaps.filter(g => g.selected && g.hasGap);
@@ -964,23 +968,21 @@ async function dispatchSelected() {
 
     setStatus('Builder Dispatching...', 'processing');
     setStep(3);
+    setActiveAgent('builder');
+    dispatchInProgress = true;
 
-    // Update status on unified table rows to "Dispatching"
-    selectedGaps.forEach(gap => {
-        const row = document.getElementById(`unified-row-${gap.id - 1}`);
-        if (row) {
-            const statusCell = row.querySelector('.col-status');
-            if (statusCell) statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Dispatching</span>`;
-        }
-    });
-
-    // Show a log panel for dispatch output
+    // Build and show the dispatch table on first dispatch
     showPanel('panel-issues');
-    document.getElementById('issueCreationProgress').style.display = 'none';
-    document.getElementById('issueTableHeader').style.display = 'none';
-    document.getElementById('issueTableContainer').style.display = 'none';
-    document.getElementById('issueLog').style.display = 'block';
+    renderDispatchTable(selectedGaps, cloudGaps, localGaps);
     document.getElementById('issueLogEntries').innerHTML = '';
+
+    // Show epic link if available
+    if (epicIssueNumber > 0 && epicIssueUrl) {
+        const epicLink = document.getElementById('dispatchEpicLink');
+        epicLink.href = epicIssueUrl;
+        epicLink.style.display = 'inline-flex';
+        document.getElementById('dispatchEpicNumber').textContent = epicIssueNumber;
+    }
 
     let allResults = [];
     createdIssues = [];
@@ -989,19 +991,16 @@ async function dispatchSelected() {
         const promises = [];
         const promiseLabels = [];
 
-        // Cloud path: create issues first, then assign coding agent
         if (cloudGaps.length > 0) {
             promises.push(dispatchCloudFromGaps(cloudGaps));
             promiseLabels.push('cloud');
         }
 
-        // Local path: dispatch directly via Copilot SDK
         if (localGaps.length > 0) {
             promises.push(dispatchLocalFromGaps(localGaps));
             promiseLabels.push('local');
         }
 
-        // Use allSettled so one failure doesn't abort the other
         const settled = await Promise.allSettled(promises);
         const errors = [];
         settled.forEach((result, i) => {
@@ -1022,6 +1021,9 @@ async function dispatchSelected() {
             showToast(`Partial failure: ${errors.join('; ')}`, 'warning');
         }
 
+        // Mark dispatched items
+        selectedGaps.forEach(g => dispatchedGapIds.add(g.id));
+
         // Update unified table rows with results
         allResults.forEach(result => {
             const gapId = result.gapId || result.issueNumber;
@@ -1036,15 +1038,21 @@ async function dispatchSelected() {
             }
         });
 
+        // Update dispatch progress to 100%
+        document.getElementById('dispatchProgressFill').style.width = '100%';
+
         setStep(4);
         setStatus('Agents Dispatched', '');
-        renderCompletion(allResults);
-        showPanel('panel-complete');
-        setActiveAgent('builder');
+        dispatchInProgress = false;
+
+        // Show actions bar with remaining count
+        updateDispatchCounts();
+        document.getElementById('dispatchActions').style.display = 'flex';
 
     } catch (error) {
         showToast(error.message);
         setStatus('Error', 'error');
+        dispatchInProgress = false;
         btn.disabled = false;
         btn.innerHTML = `
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1057,11 +1065,242 @@ async function dispatchSelected() {
     }
 }
 
+// ─── Render Dispatch Table ────────────────────────────────────────────────────
+function renderDispatchTable(selectedGaps, cloudGaps, localGaps) {
+    const tbody = document.getElementById('dispatchTableBody');
+
+    // If first dispatch, render all gaps (dispatching ones first, then remaining)
+    const allActionable = gaps.filter(g => g.hasGap);
+    const selectedIds = new Set(selectedGaps.map(g => g.id));
+
+    // Clear existing rows
+    tbody.innerHTML = '';
+
+    // Sort: dispatching items first, then remaining
+    const sorted = [...allActionable].sort((a, b) => {
+        const aDispatching = selectedIds.has(a.id) || dispatchedGapIds.has(a.id);
+        const bDispatching = selectedIds.has(b.id) || dispatchedGapIds.has(b.id);
+        if (aDispatching && !bDispatching) return -1;
+        if (!aDispatching && bDispatching) return 1;
+        return a.id - b.id;
+    });
+
+    const cloudIds = new Set(cloudGaps.map(g => g.id));
+    const localIds = new Set(localGaps.map(g => g.id));
+
+    sorted.forEach((gap, i) => {
+        const isDispatching = selectedIds.has(gap.id);
+        const wasDispatched = dispatchedGapIds.has(gap.id);
+        const isCloud = cloudIds.has(gap.id);
+        const isLocal = localIds.has(gap.id);
+
+        const tr = document.createElement('tr');
+        tr.id = `dispatch-row-${gap.id}`;
+        tr.className = 'dispatch-row';
+        tr.style.animationDelay = `${i * 0.04}s`;
+
+        if (isDispatching) {
+            tr.classList.add('dispatching');
+        } else if (wasDispatched) {
+            tr.classList.add('dispatched');
+        } else {
+            tr.classList.add('remaining');
+        }
+
+        // Mode badge
+        let modeBadge = '';
+        if (isCloud || (wasDispatched && !isLocal)) {
+            modeBadge = `<span class="dispatch-mode-badge cloud"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg> Cloud</span>`;
+        } else if (isLocal) {
+            modeBadge = `<span class="dispatch-mode-badge local"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg> Local</span>`;
+        } else {
+            modeBadge = `<span class="dispatch-mode-badge pending">—</span>`;
+        }
+
+        // Issue column
+        let issueCell = '';
+        if (isDispatching && isCloud) {
+            issueCell = `<span class="dispatch-issue-pending"><span class="status-chip-dot"></span> Creating...</span>`;
+        } else if (wasDispatched) {
+            issueCell = `<span class="text-muted">—</span>`;
+        } else {
+            issueCell = `<span class="text-muted">—</span>`;
+        }
+
+        // Status column
+        let statusCell = '';
+        if (isDispatching && isLocal) {
+            statusCell = `<span class="status-chip working"><span class="status-chip-dot"></span> Working</span>`;
+        } else if (isDispatching) {
+            statusCell = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> In Progress</span>`;
+        } else if (wasDispatched) {
+            statusCell = `<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Dispatched</span>`;
+        } else {
+            statusCell = `<span class="status-chip pending">Queued</span>`;
+        }
+
+        tr.innerHTML = `
+            <td class="col-req"><div class="td-requirement">${escapeHtml(gap.requirement)}</div></td>
+            <td class="col-dispatch-mode">${modeBadge}</td>
+            <td class="col-dispatch-issue" id="dispatch-issue-${gap.id}">${issueCell}</td>
+            <td class="col-dispatch-status" id="dispatch-status-${gap.id}">${statusCell}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    updateDispatchCounts();
+}
+
+// ─── Update dispatch table row when a cloud issue is created ──────────────────
+function updateDispatchRowIssue(gapId, issue) {
+    const issueCell = document.getElementById(`dispatch-issue-${gapId}`);
+    if (issueCell) {
+        issueCell.innerHTML = `<a href="${issue.url}" target="_blank" class="dispatch-issue-link">#${issue.number}</a>`;
+    }
+}
+
+function updateDispatchRowStatus(gapId, status, extra) {
+    const statusCell = document.getElementById(`dispatch-status-${gapId}`);
+    const row = document.getElementById(`dispatch-row-${gapId}`);
+    if (!statusCell) return;
+
+    if (status === 'assigning') {
+        statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Assigning</span>`;
+    } else if (status === 'assigned') {
+        statusCell.innerHTML = `<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Assigned</span>`;
+        if (row) { row.classList.remove('dispatching'); row.classList.add('dispatched'); }
+    } else if (status === 'completed') {
+        statusCell.innerHTML = `<span class="status-chip completed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>`;
+        if (row) { row.classList.remove('dispatching'); row.classList.add('dispatched'); }
+    } else if (status === 'working') {
+        statusCell.innerHTML = `<span class="status-chip working"><span class="status-chip-dot"></span> Working</span>`;
+    } else if (status === 'failed') {
+        statusCell.innerHTML = `<span class="status-chip error"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Failed</span>`;
+        if (row) { row.classList.remove('dispatching'); row.classList.add('dispatch-failed'); }
+    }
+}
+
+// ─── Update dispatch summary counts ───────────────────────────────────────────
+function updateDispatchCounts() {
+    const allActionable = gaps.filter(g => g.hasGap);
+    const dispatched = allActionable.filter(g => dispatchedGapIds.has(g.id)).length;
+    const remaining = allActionable.length - dispatched;
+
+    document.getElementById('dispatchedCount').textContent = dispatched;
+    document.getElementById('dispatchPendingCount').textContent = remaining;
+
+    const remainBtn = document.getElementById('dispatchRemainingCount');
+    if (remainBtn) remainBtn.textContent = remaining;
+
+    const btnContainer = document.getElementById('dispatchActions');
+    const btnMore = document.getElementById('btnDispatchMore');
+    if (remaining === 0 && btnMore) {
+        btnMore.style.display = 'none';
+    } else if (btnMore) {
+        btnMore.style.display = '';
+    }
+
+    // Progress bar
+    const percent = allActionable.length > 0 ? (dispatched / allActionable.length) * 100 : 0;
+    document.getElementById('dispatchProgressFill').style.width = `${percent}%`;
+}
+
+// ─── Dispatch Remaining (from dispatch panel) ─────────────────────────────────
+async function dispatchRemaining() {
+    // Find undispatched actionable gaps and dispatch them
+    const remaining = gaps.filter(g => g.hasGap && !dispatchedGapIds.has(g.id));
+    if (remaining.length === 0) {
+        showToast('All requirements have been dispatched.');
+        return;
+    }
+
+    // Mark remaining as selected with cloud default
+    remaining.forEach(g => g.selected = true);
+
+    // Go back to analysis panel to let user pick agent type, or auto-dispatch as cloud
+    const cloudGaps = remaining;
+    const localGaps = [];
+
+    const btn = document.getElementById('btnDispatchMore');
+    btn.disabled = true;
+    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Dispatching ${remaining.length}...`;
+
+    setStatus('Builder Dispatching...', 'processing');
+    dispatchInProgress = true;
+
+    // Update table: mark remaining rows as dispatching
+    remaining.forEach(g => {
+        const row = document.getElementById(`dispatch-row-${g.id}`);
+        if (row) {
+            row.classList.remove('remaining');
+            row.classList.add('dispatching');
+        }
+        const modeCell = row?.querySelector('.col-dispatch-mode');
+        if (modeCell) modeCell.innerHTML = `<span class="dispatch-mode-badge cloud"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg> Cloud</span>`;
+        const issueCell = document.getElementById(`dispatch-issue-${g.id}`);
+        if (issueCell) issueCell.innerHTML = `<span class="dispatch-issue-pending"><span class="status-chip-dot"></span> Creating...</span>`;
+        const statusCell = document.getElementById(`dispatch-status-${g.id}`);
+        if (statusCell) statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> In Progress</span>`;
+    });
+
+    try {
+        const results = await dispatchCloudFromGaps(cloudGaps);
+        remaining.forEach(g => dispatchedGapIds.add(g.id));
+
+        results.forEach(result => {
+            const gapId = result.gapId || result.issueNumber;
+            const row = document.getElementById(`unified-row-${gapId - 1}`);
+            if (row) {
+                const statusCell = row.querySelector('.col-status');
+                if (statusCell) {
+                    statusCell.innerHTML = result.assigned
+                        ? '<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Dispatched</span>'
+                        : '<span class="status-chip error"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Failed</span>';
+                }
+            }
+        });
+
+        setStatus('All Dispatched', '');
+        dispatchInProgress = false;
+        updateDispatchCounts();
+
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Error', 'error');
+        dispatchInProgress = false;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+            Dispatch Remaining
+            <span class="btn-badge" id="dispatchRemainingCount">0</span>
+        `;
+        updateDispatchCounts();
+    }
+}
+
+// ─── Finish Dispatch: go to completion panel ──────────────────────────────────
+function finishDispatch() {
+    const allActionable = gaps.filter(g => g.hasGap);
+    const dispatched = allActionable.filter(g => dispatchedGapIds.has(g.id));
+    const results = dispatched.map(g => ({
+        gapId: g.id,
+        assigned: true,
+    }));
+    renderCompletion(results);
+    showPanel('panel-complete');
+}
+
 // ─── Cloud dispatch from gaps: create issues → assign coding agent ────────────
 async function dispatchCloudFromGaps(cloudGaps) {
     const selectedIds = cloudGaps.map(g => g.id);
     appendLog('issueLogEntries', `☁️ Creating ${selectedIds.length} issue(s) on GitHub...`);
-    appendLog('issueLogEntries', `🤖 Agent: Builder`);
+
+    // Build a map from issue title → gap id for matching
+    const gapByTitle = {};
+    cloudGaps.forEach(g => { gapByTitle[g.requirement.trim()] = g.id; });
 
     // Step 1: Create issues
     const response = await fetch('/api/create-issues', {
@@ -1079,6 +1318,8 @@ async function dispatchCloudFromGaps(cloudGaps) {
     const decoder = new TextDecoder();
     let buffer = '';
     let newIssues = [];
+    // Map issue number → gap id for assignment step
+    const issueToGap = {};
 
     while (true) {
         const { done, value } = await reader.read();
@@ -1102,6 +1343,28 @@ async function dispatchCloudFromGaps(cloudGaps) {
                 newIssues.push(issue);
                 createdIssues.push(issue);
                 appendLog('issueLogEntries', `  ✅ Issue #${issue.number}: ${issue.title}`);
+
+                // Match issue to gap by id or title
+                let matchedGapId = issue.gapId || null;
+                if (!matchedGapId) {
+                    // Try title matching
+                    for (const g of cloudGaps) {
+                        if (issue.title && issue.title.includes(g.requirement.substring(0, 40))) {
+                            matchedGapId = g.id;
+                            break;
+                        }
+                    }
+                }
+                // Fallback: assign by order
+                if (!matchedGapId && newIssues.length <= cloudGaps.length) {
+                    matchedGapId = cloudGaps[newIssues.length - 1].id;
+                }
+
+                if (matchedGapId) {
+                    issueToGap[issue.number] = matchedGapId;
+                    updateDispatchRowIssue(matchedGapId, issue);
+                    updateDispatchRowStatus(matchedGapId, 'assigning');
+                }
             } else if (eventType === 'log') {
                 const { message } = JSON.parse(eventData);
                 appendLog('issueLogEntries', message);
@@ -1117,7 +1380,6 @@ async function dispatchCloudFromGaps(cloudGaps) {
     // Step 2: Assign coding agent
     const issueNumbers = newIssues.map(i => i.number).filter(n => n > 0);
     appendLog('issueLogEntries', `☁️ Assigning ${issueNumbers.length} issue(s) to GitHub Copilot Coding Agent...`);
-    appendLog('issueLogEntries', `🤖 Handoff: Builder → Copilot Coding Agent`);
 
     const assignResp = await fetch('/api/assign-coding-agent', {
         method: 'POST',
@@ -1153,7 +1415,12 @@ async function dispatchCloudFromGaps(cloudGaps) {
 
             if (eventType === 'assignment') {
                 const result = JSON.parse(eventData);
-                results.push({ gapId: result.issueNumber, issueNumber: result.issueNumber, assigned: result.assigned, message: result.message });
+                const gapId = issueToGap[result.issueNumber] || result.issueNumber;
+                results.push({ gapId, issueNumber: result.issueNumber, assigned: result.assigned, message: result.message });
+
+                // Update dispatch table row
+                updateDispatchRowStatus(gapId, result.assigned ? 'assigned' : 'failed');
+
                 appendLog('issueLogEntries', result.assigned
                     ? `  ✅ #${result.issueNumber} → Copilot Coding Agent assigned`
                     : `  ❌ #${result.issueNumber} → Failed to assign`);
@@ -1162,7 +1429,12 @@ async function dispatchCloudFromGaps(cloudGaps) {
                 appendLog('issueLogEntries', message);
             } else if (eventType === 'complete') {
                 const data = JSON.parse(eventData);
-                if (data.results) results = data.results.map(r => ({ ...r, gapId: r.issueNumber }));
+                if (data.results) {
+                    results = data.results.map(r => {
+                        const gapId = issueToGap[r.issueNumber] || r.issueNumber;
+                        return { ...r, gapId };
+                    });
+                }
             }
         }
     }
@@ -1174,7 +1446,10 @@ async function dispatchCloudFromGaps(cloudGaps) {
 async function dispatchLocalFromGaps(localGaps) {
     const gapIds = localGaps.map(g => g.id);
     appendLog('issueLogEntries', `💻 Dispatching ${gapIds.length} gap(s) to local Copilot SDK agent...`);
-    appendLog('issueLogEntries', `🤖 Agent: Builder → Local mode`);
+
+    // Auto-expand activity log when local agent starts
+    const logDetails = document.getElementById('dispatchLogDetails');
+    if (logDetails && !logDetails.open) logDetails.open = true;
 
     const response = await fetch('/api/execute-local-agent', {
         method: 'POST',
@@ -1212,12 +1487,31 @@ async function dispatchLocalFromGaps(localGaps) {
             if (eventType === 'item-complete') {
                 const data = JSON.parse(eventData);
                 results.push({ gapId: data.id, assigned: data.success, message: data.summary });
+
+                // Update dispatch table
+                updateDispatchRowStatus(data.id, data.success ? 'completed' : 'failed');
+
+                // Update issue column with summary snippet
+                const issueCell = document.getElementById(`dispatch-issue-${data.id}`);
+                if (issueCell) {
+                    issueCell.innerHTML = data.success
+                        ? `<span class="dispatch-local-done">✓ Done</span>`
+                        : `<span class="text-muted">—</span>`;
+                }
+
                 appendLog('issueLogEntries', data.success
                     ? `  ✅ Gap ${data.id}: ${(data.summary || '').substring(0, 60)}`
                     : `  ❌ Gap ${data.id}: Failed`);
             } else if (eventType === 'item-start') {
                 const { id, requirement } = JSON.parse(eventData);
-                appendLog('issueLogEntries', `💻 Local agent starting: ${requirement.substring(0, 60)}...`);
+                updateDispatchRowStatus(id, 'working');
+                // Auto-expand the activity log so local agent progress is visible
+                const logDetails = document.getElementById('dispatchLogDetails');
+                if (logDetails && !logDetails.open) logDetails.open = true;
+                appendLog('issueLogEntries', `💻 Local agent working: ${requirement.substring(0, 60)}...`);
+            } else if (eventType === 'item-progress') {
+                const { id, message } = JSON.parse(eventData);
+                appendLog('issueLogEntries', `  ⚙ [Gap ${id}] ${message}`);
             } else if (eventType === 'log') {
                 const { message } = JSON.parse(eventData);
                 appendLog('issueLogEntries', message);
@@ -1269,6 +1563,8 @@ function resetApp() {
     validationResults = [];
     qaMode = false;
     previousPanel = 'panel-analyze';
+    dispatchedGapIds = new Set();
+    dispatchInProgress = false;
     setStep(1);
     setStatus('Ready', '');
     showPanel('panel-analyze');

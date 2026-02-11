@@ -67,6 +67,96 @@ async function checkExistingDeployment(log: (msg: string) => void): Promise<stri
     }
 }
 
+/**
+ * Merge any feature/gap-* branches from origin into local main.
+ * This picks up changes made by the local Copilot SDK agent
+ * (which creates remote branches via GitHub MCP).
+ * Returns the list of branches that were merged.
+ */
+async function mergeLocalAgentBranches(log: (msg: string) => void): Promise<string[]> {
+    const merged: string[] = [];
+    try {
+        // Fetch latest from origin
+        await run("git fetch origin --prune", log, 30_000);
+
+        // Ensure we are on main
+        await run("git checkout main", log, 10_000);
+
+        // List remote feature/gap-* branches
+        const { stdout } = await execAsync(
+            "git branch -r --list 'origin/feature/gap-*' | sed 's|origin/||' | tr -d ' '",
+            { cwd: REPO_PATH, timeout: 10_000 },
+        );
+        const branches = stdout.trim().split("\n").filter(Boolean);
+
+        if (branches.length === 0) {
+            log("No local-agent feature branches found to merge.");
+            return [];
+        }
+
+        log(`Found ${branches.length} local-agent branch(es) to merge: ${branches.join(", ")}`);
+
+        for (const branch of branches) {
+            try {
+                await run(`git merge origin/${branch} --no-edit -m "Merge ${branch} into main for deploy"`, log, 15_000);
+                log(`Merged: ${branch}`);
+                merged.push(branch);
+            } catch (mergeErr) {
+                const msg = mergeErr instanceof Error ? mergeErr.message : String(mergeErr);
+                log(`Warning: could not merge ${branch} — ${msg.substring(0, 120)}`);
+                // Abort failed merge to keep tree clean
+                try { await execAsync("git merge --abort", { cwd: REPO_PATH, timeout: 5_000 }); } catch { /* ignore */ }
+            }
+        }
+
+        if (merged.length > 0) {
+            log(`Successfully merged ${merged.length} branch(es) into main.`);
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log(`Warning: branch merge step failed — ${msg.substring(0, 200)}`);
+    }
+    return merged;
+}
+
+/**
+ * Reset the corporate-website repo to a clean origin/main state.
+ * Deletes local feature/gap-* branches and hard-resets main.
+ * Called on server startup to ensure a clean demo environment.
+ */
+export async function resetCorpWebsiteRepo(): Promise<void> {
+    const log = (msg: string) => console.log(`[reset-repo] ${msg}`);
+    try {
+        // Ensure we are on main
+        try {
+            await execAsync("git checkout main --force", { cwd: REPO_PATH, timeout: 10_000 });
+        } catch { /* may already be on main */ }
+
+        // Hard reset to origin/main
+        await execAsync("git fetch origin", { cwd: REPO_PATH, timeout: 30_000 });
+        await execAsync("git reset --hard origin/main", { cwd: REPO_PATH, timeout: 10_000 });
+        await execAsync("git clean -fd", { cwd: REPO_PATH, timeout: 10_000 });
+        log("Reset corporate-website to origin/main.");
+
+        // Delete local feature/gap-* branches
+        const { stdout } = await execAsync(
+            "git branch --list 'feature/gap-*' | tr -d ' '",
+            { cwd: REPO_PATH, timeout: 10_000 },
+        );
+        const localBranches = stdout.trim().split("\n").filter(Boolean);
+        for (const branch of localBranches) {
+            try {
+                await execAsync(`git branch -D ${branch}`, { cwd: REPO_PATH, timeout: 5_000 });
+                log(`Deleted local branch: ${branch}`);
+            } catch { /* ignore */ }
+        }
+
+        log("Corporate-website repo is clean and ready for demo.");
+    } catch (err) {
+        console.error("[reset-repo] Warning: could not fully reset corporate-website:", err instanceof Error ? err.message : String(err));
+    }
+}
+
 /** Extract an Azure-like URL from text */
 function extractUrl(text: string): string | null {
     const match = text.match(
@@ -180,12 +270,37 @@ export async function deployToAzure(options: DeployOptions): Promise<DeployResul
         progress(0, "Checking existing Azure deployment...");
         const existingUrl = await checkExistingDeployment(log);
         if (existingUrl) {
-            progress(4, "Deployment already active!");
-            return { success: true, url: existingUrl, message: "App is already deployed on Azure" };
+            // Existing deployment found — merge any local-agent branches and redeploy
+            progress(1, "Merging local agent changes...");
+            const merged = await mergeLocalAgentBranches(log);
+
+            if (merged.length > 0) {
+                // Rebuild and redeploy with the merged changes
+                progress(2, "Redeploying with local agent changes...");
+                log("Running azd deploy to push updated code...");
+                try {
+                    await run("azd deploy --no-prompt 2>&1", log, 600_000);
+                    log("Redeployment complete with local changes.");
+                } catch (deployErr) {
+                    const msg = deployErr instanceof Error ? deployErr.message : String(deployErr);
+                    log(`azd deploy failed, falling back to azd up: ${msg.substring(0, 200)}`);
+                    await run("azd up --no-prompt 2>&1", log, 600_000);
+                }
+                progress(4, "Redeployment complete!");
+            } else {
+                progress(4, "Deployment already active (no new local changes).");
+            }
+
+            return { success: true, url: existingUrl, message: merged.length > 0
+                ? `Redeployed with ${merged.length} local change(s)`
+                : "App is already deployed on Azure" };
         }
 
         // ── Step 1: scaffold azure.yaml if missing ────────────────────────
         progress(1, "Preparing Azure deployment config...");
+
+        // Also merge any local-agent branches before first deploy
+        await mergeLocalAgentBranches(log);
 
         let hasAzureYaml = false;
         try {

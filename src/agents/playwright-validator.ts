@@ -460,7 +460,143 @@ function formatAuditEvidence(audit: Record<string, unknown>): string {
     r += `Horizontal scroll: ${a.mobile?.hasHorizontalScroll} (body ${a.mobile?.bodyScrollWidth}px vs viewport ${a.mobile?.viewportWidth}px)\n`;
     r += `Text elements < 12px: ${a.mobile?.smallTextElements}\n`;
 
+    // ── RED FLAGS: explicit summary of missing/failing elements ──
+    r += `\n## ⚠️ RED FLAGS — HARD FACTS FROM DOM INSPECTION ⚠️\n`;
+    r += `These are BOOLEAN facts extracted directly from the live DOM. Do NOT override these with assumptions.\n\n`;
+
+    // Form compliance flags
+    const forms = a.forms ?? [];
+    if (forms.length > 0) {
+        const totalCheckboxes = forms.reduce((n: number, f: any) => n + (f.checkboxCount || 0), 0);
+        const anyPrivacyCb = forms.some((f: any) => f.hasPrivacyCheckbox);
+        const anyCookieCb = forms.some((f: any) => f.hasCookieCheckbox);
+        const anyCaptcha = forms.some((f: any) => f.hasRecaptcha);
+        const anyPrivacyLink = forms.some((f: any) => f.hasPrivacyLink);
+        const anyCookieLink = forms.some((f: any) => f.hasCookieLink);
+
+        r += `FORM COMPLIANCE:\n`;
+        r += `  Total checkboxes across all forms: ${totalCheckboxes}\n`;
+        r += `  Privacy/consent checkbox exists: ${anyPrivacyCb ? '✅ YES' : '❌ NO — MISSING'}\n`;
+        r += `  Cookie consent checkbox exists: ${anyCookieCb ? '✅ YES' : '❌ NO — MISSING'}\n`;
+        r += `  reCAPTCHA/CAPTCHA exists: ${anyCaptcha ? '✅ YES' : '❌ NO — MISSING'}\n`;
+        r += `  Privacy policy link in/near form: ${anyPrivacyLink ? '✅ YES' : '❌ NO — MISSING'}\n`;
+        r += `  Cookie policy link in/near form: ${anyCookieLink ? '✅ YES' : '❌ NO — MISSING'}\n`;
+
+        if (!anyPrivacyCb && !anyCookieCb && !anyCaptcha) {
+            r += `\n  🚨 CRITICAL: Forms have ZERO compliance elements (no checkboxes, no captcha, no policy links).\n`;
+            r += `     Any requirement involving GDPR, consent, privacy, or spam protection MUST FAIL.\n`;
+        }
+    } else {
+        r += `FORM COMPLIANCE: ❌ NO FORMS FOUND ON PAGE\n`;
+    }
+
+    // Cookie banner
+    r += `\nCOOKIE CONSENT BANNER: ${a.cookieConsent?.hasBanner ? '✅ YES' : '❌ NO — NOT FOUND'}\n`;
+
+    // Dedicated pages
+    const missingPages: string[] = [];
+    for (const [pp, d] of Object.entries(a.pages ?? {}) as [string, any][]) {
+        if (!d.exists || d.redirectedToHome) missingPages.push(pp);
+    }
+    if (missingPages.length > 0) {
+        r += `\nMISSING DEDICATED PAGES: ${missingPages.join(', ')}\n`;
+        r += `  These paths either returned 404 or redirected to the home page.\n`;
+    }
+
     return r;
+}
+
+// ── Deterministic Pre-Checks ──────────────────────────────────────────────────
+
+/**
+ * Check if the audit evidence deterministically fails a requirement BEFORE
+ * sending to the AI judge. This catches obvious failures that the AI might
+ * hallucinate past — e.g. GDPR compliance when there are literally zero
+ * privacy checkboxes and no reCAPTCHA in the DOM.
+ */
+function deterministicPreCheck(
+    audit: Record<string, unknown>,
+    requirement: string,
+): { autoFail: boolean; reason: string } | null {
+    const a = audit as any;
+    const reqLower = requirement.toLowerCase();
+    const forms = a.forms ?? [];
+
+    // ── GDPR / privacy compliance check ──
+    if (
+        (reqLower.includes('gdpr') || reqLower.includes('privacy') || reqLower.includes('consent')) &&
+        (reqLower.includes('form') || reqLower.includes('contact') || reqLower.includes('checkbox'))
+    ) {
+        const failReasons: string[] = [];
+
+        // Check for privacy/consent checkbox
+        if (reqLower.includes('privacy') && (reqLower.includes('checkbox') || reqLower.includes('mandatory'))) {
+            const hasAnyPrivacyCheckbox = forms.some((f: any) => f.hasPrivacyCheckbox);
+            if (!hasAnyPrivacyCheckbox) {
+                failReasons.push('No privacy/consent checkbox found in any form (hasPrivacyCheckbox=false for all forms)');
+            }
+        }
+
+        // Check for cookie consent checkbox
+        if (reqLower.includes('cookie') && reqLower.includes('consent')) {
+            const hasAnyCookieCheckbox = forms.some((f: any) => f.hasCookieCheckbox);
+            const hasCookieBanner = a.cookieConsent?.hasBanner === true;
+            if (!hasAnyCookieCheckbox && !hasCookieBanner) {
+                failReasons.push('No cookie consent checkbox in forms AND no cookie consent banner on page');
+            }
+        }
+
+        // Check for reCAPTCHA/spam protection
+        if (reqLower.includes('recaptcha') || reqLower.includes('captcha') || reqLower.includes('spam')) {
+            const hasAnyCaptcha = forms.some((f: any) => f.hasRecaptcha);
+            if (!hasAnyCaptcha) {
+                failReasons.push('No reCAPTCHA or captcha detected in any form (hasRecaptcha=false for all forms)');
+            }
+        }
+
+        // Check for privacy policy link
+        if (reqLower.includes('privacy') && (reqLower.includes('link') || reqLower.includes('policy'))) {
+            const hasPrivacyLink = forms.some((f: any) => f.hasPrivacyLink);
+            const hasPrivacyPage = Object.entries(a.pages ?? {}).some(
+                ([path, d]: [string, any]) => /privacy/i.test(path) && d?.exists
+            );
+            if (!hasPrivacyLink && !hasPrivacyPage) {
+                failReasons.push('No privacy policy link in/near any form AND no privacy page exists on site');
+            }
+        }
+
+        if (failReasons.length > 0) {
+            return {
+                autoFail: true,
+                reason: `DETERMINISTIC FAIL — Playwright DOM evidence proves non-compliance:\n${failReasons.map(r => `  • ${r}`).join('\n')}\n\nForm evidence: ${forms.length} form(s) found with total checkboxes: ${forms.reduce((n: number, f: any) => n + (f.checkboxCount || 0), 0)}, hasRecaptcha: ${forms.some((f: any) => f.hasRecaptcha)}, hasPrivacyCheckbox: ${forms.some((f: any) => f.hasPrivacyCheckbox)}, hasCookieCheckbox: ${forms.some((f: any) => f.hasCookieCheckbox)}, hasPrivacyLink: ${forms.some((f: any) => f.hasPrivacyLink)}`,
+            };
+        }
+    }
+
+    // ── Dedicated page existence check ──
+    if (reqLower.includes('dedicated page') || reqLower.includes('live before launch')) {
+        const pageChecks: { pattern: RegExp; label: string }[] = [];
+        if (reqLower.includes('privacy')) pageChecks.push({ pattern: /privacy/i, label: 'privacy' });
+        if (reqLower.includes('cookie')) pageChecks.push({ pattern: /cookie/i, label: 'cookie policy' });
+        if (reqLower.includes('sustainability')) pageChecks.push({ pattern: /sustainability/i, label: 'sustainability' });
+
+        const missing: string[] = [];
+        for (const pc of pageChecks) {
+            const found = Object.entries(a.pages ?? {}).some(
+                ([path, d]: [string, any]) => pc.pattern.test(path) && d?.exists && !d?.redirectedToHome
+            );
+            if (!found) missing.push(pc.label);
+        }
+
+        if (missing.length > 0) {
+            return {
+                autoFail: true,
+                reason: `DETERMINISTIC FAIL — Required dedicated page(s) do not exist: ${missing.join(', ')}. All probed paths returned 404 or redirected to home.`,
+            };
+        }
+    }
+
+    return null; // no deterministic verdict — defer to AI judge
 }
 
 // ── Per-Requirement Sub-Agent Evaluation ──────────────────────────────────────
@@ -478,6 +614,19 @@ async function evaluateSingleRequirement(
     reqIndex: number,
     log: (msg: string) => void,
 ): Promise<ValidationResult> {
+    // ── Deterministic pre-check: catch obvious failures without AI ──
+    const preCheck = deterministicPreCheck(audit, requirement);
+    if (preCheck?.autoFail) {
+        log(`[Req ${reqIndex + 1}] DETERMINISTIC FAIL — skipping AI judge`);
+        log(`[Req ${reqIndex + 1}] ${preCheck.reason.substring(0, 200)}`);
+        return {
+            requirementIndex: reqIndex,
+            requirement,
+            passed: false,
+            details: preCheck.reason,
+        };
+    }
+
     const evidence = formatAuditEvidence(audit);
 
     const session = await createAgentSession(client, {
@@ -488,6 +637,9 @@ async function evaluateSingleRequirement(
 
 ## YOUR MINDSET
 You are trying to FIND FAILURES. You are not trying to be helpful or give the benefit of the doubt. You are a hostile auditor. If there is ANY ambiguity, the requirement FAILS. If any sub-part is missing, the ENTIRE requirement FAILS. Partial credit does not exist.
+
+## CRITICAL: READ THE RED FLAGS SECTION FIRST
+The evidence contains a "⚠️ RED FLAGS" section at the bottom with HARD BOOLEAN FACTS extracted directly from the DOM. These are NOT opinions — they are programmatic checks (e.g., "reCAPTCHA exists: ❌ NO"). You MUST NOT override these facts. If the DOM says hasRecaptcha=false, then there is NO captcha on the page, period. Do not speculate that "the site might use an alternative approach" or "server-side validation could exist".
 
 ## DECOMPOSITION RULES
 Before evaluating, you MUST decompose the requirement into every individual testable claim. Then check EACH claim against the evidence independently. If even ONE claim fails, the entire requirement fails.
@@ -515,11 +667,11 @@ Decompose to:
 
 1. **Form fields**: Check the ACTUAL field inventory (tag, type, name, placeholder, aria-label). A form with only [name, email, message] does NOT satisfy a requirement for [name, email, company, phone, message]. Count the actual fields.
 
-2. **reCAPTCHA/CAPTCHA**: The evidence explicitly reports hasRecaptcha as true/false. If false, there is no spam protection. Do NOT assume any other mechanism exists unless explicitly shown in evidence.
+2. **reCAPTCHA/CAPTCHA**: The evidence explicitly reports hasRecaptcha as true/false. If false, there is no spam protection. Do NOT assume any other mechanism exists unless explicitly shown in evidence. "Server-side validation" is NOT a substitute for reCAPTCHA when reCAPTCHA is explicitly required.
 
 3. **Cookie consent**: Check BOTH the cookieConsent banner evidence AND form-level cookie checkboxes. A cookie consent banner != cookie consent checkbox in a form. They are different things. The requirement may ask for one or both.
 
-4. **Privacy policy**: A "mandatory privacy policy checkbox" means an actual checkbox element in/near the form whose label text references "privacy" or "policy". hasPrivacyCheckbox in the evidence directly answers this.
+4. **Privacy policy**: A "mandatory privacy policy checkbox" means an actual checkbox element in/near the form whose label text references "privacy" or "policy". hasPrivacyCheckbox in the evidence directly answers this. If it says false, there is NO such checkbox. No exceptions.
 
 5. **Text matching**: If exact text is specified (headlines, taglines), it must appear EXACTLY in the corresponding element. "Innovating for Tomorrow" in an <h1> is NOT the same as "Innovation for Tomorrow's World".
 
@@ -528,6 +680,9 @@ Decompose to:
 7. **Computed fonts**: Check the actual computed font-family strings, not just whether a stylesheet was imported.
 
 8. **Performance**: Mobile load > 3000ms or FCP > 2500ms likely means below a score of 85.
+
+## ABSOLUTE RULE
+If the RED FLAGS section says an element is "❌ NO — MISSING", that element is MISSING. You cannot rationalize it into passing. Your decomposition claim for that element MUST be marked FAIL.
 
 ## OUTPUT FORMAT
 Return ONLY valid JSON (no markdown fences, no text before/after):
