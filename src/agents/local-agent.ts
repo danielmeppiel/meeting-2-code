@@ -1,7 +1,7 @@
 import { exec } from "child_process";
 import { promisify } from "util";
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from "fs";
-import { join, relative } from "path";
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from "fs";
+import { join, relative, dirname, normalize } from "path";
 import type { CopilotClient, MCPLocalServerConfig, MCPRemoteServerConfig } from "@github/copilot-sdk";
 import { createAgentSession } from "./session-helpers.js";
 
@@ -67,8 +67,7 @@ async function commitAndPush(branchName: string, message: string, log: (m: strin
     }
     const safeMsg = message.replace(/"/g, '\\"').replace(/\n/g, " ");
     await execAsync(`git commit -m "${safeMsg}"`, { cwd: REPO_PATH, timeout: 10_000 });
-    await execAsync(`git push origin ${branchName} --force`, { cwd: REPO_PATH, timeout: 60_000 });
-    log(`Pushed branch ${branchName} to origin.`);
+    log(`Committed changes on branch ${branchName} (local only).`);
 }
 
 /** Read key website files from the local clone to give the model context. */
@@ -100,24 +99,52 @@ function readWebsiteFiles(basePath: string): { path: string; content: string }[]
     return files;
 }
 
-/** Parse file changes from the model response. Expects fenced code blocks with FILE: headers. */
+/** Parse file changes from the model response. Handles multiple common LLM output formats. */
 function parseFileChanges(response: string): { file: string; content: string }[] {
     const changes: { file: string; content: string }[] = [];
-    // Match patterns like:
-    //   FILE: path/to/file.html
-    //   ```html
-    //   <content>
-    //   ```
-    // OR: ```html:path/to/file.html
-    const blockRegex = /(?:FILE:\s*(.+?)\s*\n```[a-z]*\n([\s\S]*?)```)|(?:```[a-z]*:(.+?)\s*\n([\s\S]*?)```)/g;
-    let match;
-    while ((match = blockRegex.exec(response)) !== null) {
-        const file = (match[1] || match[3] || "").trim();
-        const content = (match[2] || match[4] || "").trim();
-        if (file && content) {
-            changes.push({ file, content });
+    const seen = new Set<string>();
+
+    function add(file: string, content: string) {
+        const f = file.trim().replace(/^`+|`+$/g, "");
+        const c = content.trim();
+        if (f && c && !seen.has(f)) {
+            seen.add(f);
+            changes.push({ file: f, content: c });
         }
     }
+
+    // Pattern 1: FILE: path/to/file\n```lang\n<content>\n```
+    const pat1 = /FILE:\s*(.+?)\s*\n\s*```[a-z]*\n([\s\S]*?)```/gi;
+    let m;
+    while ((m = pat1.exec(response)) !== null) add(m[1]!, m[2]!);
+
+    // Pattern 2: ```lang:path/to/file\n<content>\n```
+    const pat2 = /```[a-z]*:(.+?)\s*\n([\s\S]*?)```/g;
+    while ((m = pat2.exec(response)) !== null) add(m[1]!, m[2]!);
+
+    // Pattern 3: **FILE:** path  or  **`path`** followed by fenced block
+    const pat3 = /\*\*(?:FILE:?)?\s*`?([^`*\n]+?)`?\s*\*\*\s*\n\s*```[a-z]*\n([\s\S]*?)```/gi;
+    while ((m = pat3.exec(response)) !== null) add(m[1]!, m[2]!);
+
+    // Pattern 4: ### path/to/file  (markdown header) followed by fenced block
+    const pat4 = /#{1,4}\s+([^\n]+?\.(?:html|css|js|ts|tsx|jsx|json|md))\s*\n\s*```[a-z]*\n([\s\S]*?)```/gi;
+    while ((m = pat4.exec(response)) !== null) add(m[1]!, m[2]!);
+
+    // Pattern 5: standalone fenced block with only one file-like path mentioned nearby
+    // (fallback — only if nothing found so far)
+    if (changes.length === 0) {
+        const blocks = [...response.matchAll(/```[a-z]*\n([\s\S]*?)```/g)];
+        for (const block of blocks) {
+            const content = block[1]?.trim();
+            if (!content || content.length < 20) continue;
+            // Look for a filepath in the 200 chars preceding this block
+            const idx = block.index ?? 0;
+            const preceding = response.substring(Math.max(0, idx - 200), idx);
+            const fileMatch = preceding.match(/([\w./-]+\.(?:html|css|js|ts|tsx|jsx|json))\s*[:)]?\s*$/i);
+            if (fileMatch) add(fileMatch[1]!, content);
+        }
+    }
+
     return changes;
 }
 
@@ -179,7 +206,7 @@ export async function executeLocalAgent(
                 model: "claude-sonnet-4-20250514",
                 mcpServers: options.githubMcp,
                 systemMessage: {
-                    content: `You are a coding agent that implements features in the ${OWNER}/${REPO} repository.
+                    content: `You are a coding agent that implements features in the ${OWNER}/${REPO} locally cloned repository.
 
 CRITICAL RULES:
 - You may use GitHub MCP tools ONLY to READ files from owner="${OWNER}" repo="${REPO}".
@@ -236,17 +263,30 @@ of every file that needs to change using the FILE: format described in your inst
             const changes = parseFileChanges(responseContent);
 
             if (changes.length === 0) {
-                log("⚠ No parseable file changes in agent response. Attempting raw summary.");
-                const summary = responseContent.substring(0, 500) || "Agent responded but no file changes were parsed.";
-                onComplete(gap.id, true, summary);
-                results.push({ id: gap.id, success: true, summary });
+                log("✘ No parseable file changes in agent response — marking as failed.");
+                log("Agent response (first 300 chars): " + responseContent.substring(0, 300));
+                const summary = "Agent responded but no file changes could be parsed. The model output did not follow the expected FILE: format.";
+                onComplete(gap.id, false, summary);
+                results.push({ id: gap.id, success: false, summary });
                 continue;
             }
 
             // Write each changed file to the local clone
             for (const change of changes) {
-                const filePath = join(REPO_PATH, change.file);
-                log(`Writing: ${change.file}`);
+                // Normalize the path and prevent traversal outside the repo
+                const normalizedFile = normalize(change.file).replace(/^\/+/, "");
+                const filePath = join(REPO_PATH, normalizedFile);
+                if (!filePath.startsWith(REPO_PATH)) {
+                    log(`⚠ Skipping file outside repo: ${change.file}`);
+                    continue;
+                }
+                // Ensure the parent directory exists
+                const dir = dirname(filePath);
+                if (!existsSync(dir)) {
+                    mkdirSync(dir, { recursive: true });
+                    log(`Created directory: ${relative(REPO_PATH, dir)}`);
+                }
+                log(`Writing: ${normalizedFile}`);
                 writeFileSync(filePath, change.content + "\n", "utf-8");
             }
 

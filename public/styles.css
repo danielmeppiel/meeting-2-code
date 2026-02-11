@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Meeting → Code | Design System
+   Meeting → Ship | Design System
    World-class dark UI with glass morphism and ambient gradients
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -179,250 +179,144 @@ body {
 }
 
 /* ─── Stepper ──────────────────────────────────────────────────────────────── */
-.stepper {
+/* ─── Agent Pipeline ───────────────────────────────────────────────────────── */
+.pipeline {
     display: flex;
     align-items: center;
     gap: 0;
 }
 
-.step {
+.pipe-node {
     display: flex;
     align-items: center;
-    gap: var(--space-sm);
-    opacity: 0.4;
+    gap: 6px;
+    opacity: 0.35;
     transition: opacity var(--duration-normal) var(--ease-out);
+    cursor: pointer;
+    user-select: none;
+    padding: 4px 2px;
 }
 
-.step.active {
+.pipe-node.active {
     opacity: 1;
 }
 
-.step.completed {
+.pipe-node.completed {
     opacity: 0.7;
 }
 
-/* Clickable steps */
-.step[data-step] {
-    cursor: pointer;
-    user-select: none;
+.pipe-node:hover {
+    opacity: 0.85;
 }
 
-.step[data-step]:hover {
-    opacity: 0.9;
-}
-
-.step[data-step]:hover .step-indicator {
-    transform: scale(1.12);
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.08);
-}
-
-.step[data-step]:active .step-indicator {
-    transform: scale(0.95);
-}
-
-.step-indicator {
-    width: 28px; height: 28px;
+.pipe-avatar {
+    width: 26px;
+    height: 26px;
     border-radius: var(--radius-full);
-    background: var(--bg-tertiary);
-    border: 2px solid var(--border-default);
     display: flex;
     align-items: center;
     justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: white;
     transition: all var(--duration-normal) var(--ease-out);
-    position: relative;
+    flex-shrink: 0;
+    border: 2px solid transparent;
 }
 
-.step.active .step-indicator {
-    background: var(--accent-blue);
-    border-color: var(--accent-blue);
-    box-shadow: 0 0 16px var(--accent-blue-glow);
+/* Agent colors */
+.pipe-avatar--workiq    { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
+.pipe-avatar--analyzer  { background: #fbbf24; border-color: #fbbf24; }
+.pipe-avatar--builder   { background: #34d399; border-color: #34d399; }
+.pipe-avatar--deployer  { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
+.pipe-avatar--validator { background: #f472b6; border-color: #f472b6; }
+
+/* Inactive state: muted avatars */
+.pipe-node:not(.active):not(.completed) .pipe-avatar {
+    background: var(--bg-tertiary);
+    border-color: var(--border-default);
+    color: var(--text-tertiary);
 }
 
-.step.completed .step-indicator {
+/* Logo images inside avatars */
+.pipe-logo {
+    width: 16px;
+    height: 16px;
+    object-fit: contain;
+    display: block;
+}
+
+.pipe-node:not(.active):not(.completed) .pipe-logo {
+    opacity: 0.4;
+    filter: grayscale(1);
+}
+
+/* Completed: checkmark glow — but keep logo avatars subtle */
+.pipe-node.completed .pipe-avatar {
     background: var(--accent-emerald);
     border-color: var(--accent-emerald);
 }
-
-.step-number {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--text-secondary);
+.pipe-node.completed .pipe-avatar--workiq,
+.pipe-node.completed .pipe-avatar--deployer {
+    background: rgba(52,211,153,0.15);
+    border-color: var(--accent-emerald);
 }
 
-.step.active .step-number,
-.step.completed .step-number {
-    color: white;
+/* Active: glow ring — keep logo avatars subtle */
+.pipe-node.active .pipe-avatar {
+    box-shadow: 0 0 14px rgba(255, 255, 255, 0.15);
+}
+.pipe-node.active .pipe-avatar--workiq {
+    background: rgba(129,140,248,0.12);
+    border-color: rgba(129,140,248,0.5);
+}
+.pipe-node.active .pipe-avatar--deployer {
+    background: rgba(0,120,212,0.12);
+    border-color: rgba(0,120,212,0.5);
 }
 
-.step.completed .step-number { display: none; }
-.step-check { display: none; }
-.step.completed .step-check { display: block; color: white; }
+.pipe-labels {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
 
-.step-label {
-    font-size: 0.75rem;
+.pipe-agent {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.pipe-action {
+    font-size: 0.55rem;
     font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
     color: var(--text-tertiary);
     white-space: nowrap;
 }
 
-.step.active .step-label {
+.pipe-node.active .pipe-agent {
     color: var(--text-primary);
 }
 
-.step-connector {
-    width: 40px;
-    height: 2px;
-    background: var(--border-subtle);
-    margin: 0 var(--space-sm);
-}
-
-/* ─── Forked Stepper ───────────────────────────────────────────────────────── */
-.stepper-fork {
-    display: flex;
-    align-items: center;
-}
-
-.fork-connector {
-    width: 20px;
-    height: 40px;
-    position: relative;
-    margin: 0 2px 0 var(--space-sm);
-}
-
-/* Vertical stem of the fork */
-.fork-connector::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: calc(50% - 12px);
-    width: 2px;
-    height: 24px;
-    background: var(--border-subtle);
-}
-
-/* Top branch line */
-.fork-connector::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: calc(50% - 12px);
-    width: 100%;
-    height: 2px;
-    background: var(--border-subtle);
-}
-
-/* Bottom branch line — drawn via box-shadow on the vertical stem */
-.fork-connector::before {
-    box-shadow: 0 22px 0 0 var(--border-subtle);
-    clip-path: inset(-2px -20px -2px 0);
-}
-
-.fork-tracks {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    position: relative;
-}
-
-/* Bottom branch horizontal line */
-.fork-tracks::before {
-    content: '';
-    position: absolute;
-    left: -20px;
-    bottom: calc(50% - 7px);
-    width: 20px;
-    height: 2px;
-    background: var(--border-subtle);
-}
-
-.fork-track {
-    display: flex;
-    align-items: center;
-    gap: 0;
-    opacity: 0.28;
-    transition: opacity 0.3s var(--ease-out);
-    padding: 2px 0;
-}
-
-.fork-track.active {
-    opacity: 1;
-}
-
-.fork-track .step-indicator {
-    width: 22px;
-    height: 22px;
-}
-
-.fork-track .step-number {
-    font-size: 0.6rem;
-}
-
-.fork-track .step-label {
-    font-size: 0.7rem;
-}
-
-.fork-track .step-connector {
-    width: 24px;
-}
-
-/* Track tags (BUILD / QA) */
-.track-tag {
-    font-size: 0.55rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--text-tertiary);
-    min-width: 32px;
-    margin-right: 4px;
-    opacity: 0.7;
-}
-
-.fork-track.active .track-tag {
-    opacity: 1;
-}
-
-.track-build.active .track-tag {
-    color: var(--accent-blue);
-}
-
-.track-qa.active .track-tag {
-    color: var(--accent-emerald);
-}
-
-/* QA step indicators use icons instead of numbers */
-.step-indicator--qa {
-    width: 22px;
-    height: 22px;
-    border-radius: var(--radius-full);
-    background: var(--bg-tertiary);
-    border: 2px solid var(--border-default);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all var(--duration-normal) var(--ease-out);
-}
-
-.step-indicator--qa svg {
+.pipe-node:not(.active):not(.completed) .pipe-agent {
     color: var(--text-tertiary);
 }
 
-.fork-track.active .step.active .step-indicator--qa {
+.pipe-line {
+    width: 28px;
+    height: 2px;
+    background: var(--border-subtle);
+    margin: 0 2px;
+    flex-shrink: 0;
+    position: relative;
+}
+
+/* Completed connector fills in */
+.pipe-line.completed {
     background: var(--accent-emerald);
-    border-color: var(--accent-emerald);
-    box-shadow: 0 0 12px rgba(52, 211, 153, 0.3);
-}
-
-.fork-track.active .step.active .step-indicator--qa svg {
-    color: white;
-}
-
-.fork-track.active .step.completed .step-indicator--qa {
-    background: var(--accent-emerald);
-    border-color: var(--accent-emerald);
-}
-
-.fork-track.active .step.completed .step-indicator--qa svg {
-    color: white;
 }
 
 /* ─── Status Badge ─────────────────────────────────────────────────────────── */
@@ -1136,7 +1030,19 @@ body {
 }
 
 .status-chip.analyzing {
-    background: rgba(251, 191, 36, 0.12);
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    animation: analyzing-glow 2s ease-in-out infinite;
+}
+
+@keyframes analyzing-glow {
+    0%, 100% { background: rgba(59, 130, 246, 0.12); }
+    50% { background: rgba(59, 130, 246, 0.22); }
+}
+
+.status-chip.skipped {
+    background: rgba(251, 191, 36, 0.1);
     color: #fbbf24;
     border: 1px solid rgba(251, 191, 36, 0.2);
 }
@@ -1149,13 +1055,14 @@ body {
 }
 
 .status-chip.analyzed {
-    background: rgba(16, 185, 129, 0.12);
-    color: var(--accent-emerald);
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
 .status-chip.analyzed svg {
     flex-shrink: 0;
+    stroke: #f87171;
 }
 
 /* ─── Cell Placeholder (skeleton) ──────────────────────────────────────────── */
@@ -1395,14 +1302,15 @@ body {
 .creation-progress-fill::after {
     content: '';
     position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-    animation: shimmer 1.5s ease-in-out infinite;
+    top: 0; left: 0; bottom: 0;
+    width: 60%;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 40%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0.3) 60%, transparent 100%);
+    animation: shimmer 1.8s ease-in-out infinite;
 }
 
 @keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(220%); }
 }
 
 .creation-progress-detail {
@@ -1493,9 +1401,9 @@ body {
 }
 
 .status-chip.no-gap {
-    background: rgba(6, 182, 212, 0.12);
-    color: rgb(6, 182, 212);
-    border-color: rgba(6, 182, 212, 0.25);
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--accent-emerald);
+    border-color: rgba(16, 185, 129, 0.25);
 }
 
 .status-chip.pending {
@@ -1538,6 +1446,12 @@ body {
 
 .status-chip.completed svg {
     stroke: rgb(52, 211, 153);
+}
+
+.status-chip.implemented {
+    background: rgba(56, 189, 248, 0.12);
+    color: rgb(56, 189, 248);
+    border-color: rgba(56, 189, 248, 0.25);
 }
 
 .status-chip.working {
@@ -1697,6 +1611,12 @@ body {
     background: rgba(6, 182, 212, 0.12);
     color: rgb(34, 211, 238);
     border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+.dispatch-mode-badge.developer {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.25);
 }
 
 .dispatch-mode-badge.pending {
@@ -2327,6 +2247,12 @@ body {
 .qa-wf-step.failed .qa-wf-step-icon {
     background: rgba(248, 113, 113, 0.15);
 }
+.qa-wf-step.failed .qa-wf-step-icon svg {
+    stroke: var(--accent-red, #f87171);
+}
+.qa-wf-step.failed .qa-wf-step-label {
+    color: var(--accent-red, #f87171);
+}
 .qa-wf-connector {
     flex: 0 0 60px;
     height: 2px;
@@ -2423,7 +2349,7 @@ body {
     opacity: 0.7;
 }
 
-/* Agent: Extractor — Requirements */
+/* Agent: WorkIQ — Requirements */
 .agent-badge--extractor {
     background: rgba(99, 102, 241, 0.1);
     border: 1px solid rgba(99, 102, 241, 0.25);
@@ -2531,16 +2457,7 @@ body {
     animation: none;
 }
 
-/* Stepper agent labels */
-.step-label .step-agent-name {
-    display: block;
-    font-size: 0.55rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    opacity: 0.5;
-    margin-top: 1px;
-}
+/* (Agent labels now handled by .pipe-agent / .pipe-action in the pipeline) */
 
 /* Issue creation agent header */
 .creation-agent-header {
@@ -2675,9 +2592,9 @@ body {
 /* ─── Microsoft 365 Meeting Source Brand ───────────────────────────────────── */
 .meeting-source-brand {
     display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: 8px 16px;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
     margin-bottom: var(--space-md);
     background: linear-gradient(135deg, rgba(217, 56, 27, 0.08), rgba(255, 185, 0, 0.08));
     border: 1px solid rgba(217, 56, 27, 0.2);
@@ -2686,6 +2603,49 @@ body {
     font-weight: 600;
     color: #ff9f43;
     animation: fadeSlideIn 0.4s var(--ease-out);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+.meeting-source-brand:hover {
+    border-color: rgba(217, 56, 27, 0.35);
+}
+.meeting-source-brand-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 8px 16px;
+}
+.meeting-brand-chevron {
+    margin-left: auto;
+    transition: transform var(--duration-fast) var(--ease-out);
+    opacity: 0.6;
+}
+.meeting-source-brand.expanded .meeting-brand-chevron {
+    transform: rotate(180deg);
+}
+.meeting-source-brand-details {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 16px 12px;
+    font-weight: 400;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    border-top: 1px solid rgba(217, 56, 27, 0.1);
+    padding-top: 10px;
+    animation: fadeSlideIn 0.25s var(--ease-out);
+}
+.meeting-source-brand.expanded .meeting-source-brand-details {
+    display: flex;
+}
+.meeting-detail-row:empty {
+    display: none;
+}
+.meeting-detail-row strong {
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-right: 6px;
 }
 .meeting-source-brand img {
     flex-shrink: 0;

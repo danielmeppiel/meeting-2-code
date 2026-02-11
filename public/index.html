@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meeting → Code | The Agentic SDLC</title>
+    <title>Meeting → Ship | The Agentic SDLC</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -26,60 +26,48 @@
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>
                     </svg>
-                    <span class="logo-text">Meeting → Code</span>
+                    <span class="logo-text">Meeting → Ship</span>
                 </div>
             </div>
             <div class="header-center">
-                <div class="stepper" id="stepper">
-                    <!-- Shared steps -->
-                    <div class="step active" data-step="1">
-                        <div class="step-indicator">
-                            <span class="step-number">1</span>
-                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <div class="pipeline" id="stepper">
+                    <div class="pipe-node active" data-step="1">
+                        <div class="pipe-avatar pipe-avatar--workiq"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="M365" class="pipe-logo"></div>
+                        <div class="pipe-labels">
+                            <span class="pipe-agent">WorkIQ</span>
+                            <span class="pipe-action">Extract</span>
                         </div>
-                        <span class="step-label">Understand<span class="step-agent-name" style="color: #818cf8;">Extractor</span></span>
                     </div>
-                    <div class="step-connector"></div>
-                    <div class="step" data-step="2">
-                        <div class="step-indicator">
-                            <span class="step-number">2</span>
-                            <svg class="step-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    <div class="pipe-line"></div>
+                    <div class="pipe-node" data-step="2">
+                        <div class="pipe-avatar pipe-avatar--analyzer">A</div>
+                        <div class="pipe-labels">
+                            <span class="pipe-agent">Analyzer</span>
+                            <span class="pipe-action">Plan</span>
                         </div>
-                        <span class="step-label">Plan<span class="step-agent-name" style="color: #fbbf24;">Analyzer</span></span>
                     </div>
-
-                    <!-- Fork: two parallel tracks -->
-                    <div class="stepper-fork">
-                        <div class="fork-connector"></div>
-                        <div class="fork-tracks">
-                            <!-- Build track -->
-                            <div class="fork-track track-build active" id="trackBuild">
-                                <span class="track-tag">BUILD</span>
-                                <div class="step" data-step="3">
-                                    <div class="step-indicator">
-                                        <span class="step-number">3</span>
-                                        <svg class="step-check" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
-                                    </div>
-                                    <span class="step-label">Build<span class="step-agent-name" style="color: #34d399;">Builder</span></span>
-                                </div>
-                            </div>
-                            <!-- QA track -->
-                            <div class="fork-track track-qa" id="trackQA">
-                                <span class="track-tag">QA</span>
-                                <div class="step" data-step="qa-deploy">
-                                    <div class="step-indicator step-indicator--qa">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
-                                    </div>
-                                    <span class="step-label">Ship<span class="step-agent-name" style="color: #60a5fa;">Deployer</span></span>
-                                </div>
-                                <div class="step-connector"></div>
-                                <div class="step" data-step="qa-validate">
-                                    <div class="step-indicator step-indicator--qa">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
-                                    </div>
-                                    <span class="step-label">Verify<span class="step-agent-name" style="color: #f472b6;">Validator</span></span>
-                                </div>
-                            </div>
+                    <div class="pipe-line"></div>
+                    <div class="pipe-node" data-step="3">
+                        <div class="pipe-avatar pipe-avatar--builder">B</div>
+                        <div class="pipe-labels">
+                            <span class="pipe-agent">Builder</span>
+                            <span class="pipe-action">Code</span>
+                        </div>
+                    </div>
+                    <div class="pipe-line"></div>
+                    <div class="pipe-node" data-step="qa-deploy">
+                        <div class="pipe-avatar pipe-avatar--deployer"><img src="https://cdn.worldvectorlogo.com/logos/azure-1.svg" alt="Azure" class="pipe-logo"></div>
+                        <div class="pipe-labels">
+                            <span class="pipe-agent">Deployer</span>
+                            <span class="pipe-action">Ship</span>
+                        </div>
+                    </div>
+                    <div class="pipe-line"></div>
+                    <div class="pipe-node" data-step="qa-validate">
+                        <div class="pipe-avatar pipe-avatar--validator">V</div>
+                        <div class="pipe-labels">
+                            <span class="pipe-agent">Validator</span>
+                            <span class="pipe-action">Verify</span>
                         </div>
                     </div>
                 </div>
@@ -134,7 +122,7 @@
                         <div class="sdlc-new">
                             <span class="sdlc-label">Agentic SDLC</span>
                             <div class="sdlc-steps-mini">
-                                <span class="sdlc-agent-chip">Extractor</span>
+                                <span class="sdlc-agent-chip">WorkIQ</span>
                                 <span class="sdlc-arrow">&rarr;</span>
                                 <span class="sdlc-agent-chip">Analyzer</span>
                                 <span class="sdlc-arrow">&rarr;</span>
@@ -182,8 +170,8 @@
                                 <span>Live Analysis</span>
                             </div>
                             <span class="agent-badge agent-badge--extractor" id="activeAgentBadge">
-                                <span class="agent-avatar">E</span>
-                                <span class="agent-name">Extractor</span>
+                                <span class="agent-avatar"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="M365" style="width:16px;height:16px;object-fit:contain;"></span>
+                                <span class="agent-name">WorkIQ</span>
                                 <span class="agent-role">Requirements Agent</span>
                             </span>
                         </div>
@@ -192,23 +180,23 @@
                         <div class="loading-steps" id="loadingSteps">
                             <div class="loading-step" id="ls-fetch">
                                 <div class="loading-step-icon"></div>
-                                <span>Connecting to WorkIQ MCP</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
+                                <span>Connecting to M365 MCP</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
                             </div>
                             <div class="loading-step" id="ls-extract">
                                 <div class="loading-step-icon"></div>
                                 <span>Fetching meeting data</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
                             </div>
                             <div class="loading-step" id="ls-requirements">
                                 <div class="loading-step-icon"></div>
                                 <span>Extracting requirements</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
                             </div>
                             <div class="loading-step" id="ls-analyze">
                                 <div class="loading-step-icon"></div>
                                 <span>Creating epic issue</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">Extractor</span>
+                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
                             </div>
                             <div class="loading-step" id="ls-complexity">
                                 <div class="loading-step-icon"></div>
@@ -225,29 +213,38 @@
 
                     <!-- Right: Meeting card + Unified table -->
                     <div class="live-right" id="liveRightPanel">
-                        <!-- Office branding for meeting extraction -->
-                        <div class="meeting-source-brand" id="meetingSourceBrand" style="display:none;">
-                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="22" height="22">
-                            <span>Microsoft 365 Meeting</span>
+                        <!-- Office branding for meeting extraction (expandable) -->
+                        <div class="meeting-source-brand" id="meetingSourceBrand" style="display:none;" onclick="toggleMeetingBanner()">
+                            <div class="meeting-source-brand-header">
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="22" height="22">
+                                <span>Microsoft 365 Meeting</span>
+                                <svg class="meeting-brand-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                            <div class="meeting-source-brand-details" id="meetingBrandDetails">
+                                <div class="meeting-detail-row" id="meetingDetailTitle"></div>
+                                <div class="meeting-detail-row" id="meetingDetailDate"></div>
+                                <div class="meeting-detail-row" id="meetingDetailParticipants"></div>
+                                <div class="meeting-detail-row" id="meetingDetailSummary"></div>
+                            </div>
                         </div>
                         <!-- Meeting summary card (shown during Phase 1) -->
                         <div class="meeting-card" id="meetingCard" style="display:none;">
                             <div class="meeting-card-icon" id="meetingCardIcon">
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="48" height="48" style="object-fit: contain;" class="office-logo-img">
                             </div>
-                            <h3 class="meeting-card-title" id="meetingCardTitle">Extractor is connecting to WorkIQ...</h3>
+                            <h3 class="meeting-card-title" id="meetingCardTitle">WorkIQ is connecting to M365...</h3>
                             <p class="meeting-card-date" id="meetingCardDate"></p>
                             <div class="meeting-card-agent" id="meetingCardAgent" style="display:none;">
                                 <span class="agent-badge agent-badge--extractor">
-                                    <span class="agent-avatar">E</span>
-                                    <span class="agent-name">Extractor</span>
-                                    <span class="agent-role">found this meeting on WorkIQ</span>
+                                    <span class="agent-avatar"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="M365" style="width:16px;height:16px;object-fit:contain;"></span>
+                                    <span class="agent-name">WorkIQ</span>
+                                    <span class="agent-role">found this meeting on M365</span>
                                 </span>
                             </div>
                             <div class="meeting-card-participants" id="meetingCardParticipants" style="display:none;"></div>
                             <div class="meeting-card-status" id="meetingCardStatusRow">
                                 <div class="meeting-card-pulse"></div>
-                                <span id="meetingCardStatus">Extractor is initializing...</span>
+                                <span id="meetingCardStatus">WorkIQ is initializing...</span>
                             </div>
                         </div>
 
@@ -478,7 +475,6 @@
                                 <tr>
                                     <th class="col-req">Requirement</th>
                                     <th style="width:100px;">Status</th>
-                                    <th style="width:90px;">Complexity</th>
                                 </tr>
                             </thead>
                             <tbody id="qaGapTableBody"></tbody>

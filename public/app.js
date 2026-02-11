@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Meeting → Code | Application Logic
+   Meeting → Ship | Application Logic
    ═══════════════════════════════════════════════════════════════════════════ */
 
 // ─── State ────────────────────────────────────────────────────────────────────
@@ -33,31 +33,46 @@ function showPanel(panelId) {
 
 function setStep(step) {
     currentStep = step;
-    // Update shared steps (1,2) and build-track steps (3,4)
-    document.querySelectorAll('.stepper > .step, #trackBuild .step').forEach(s => {
-        const stepNum = parseInt(s.dataset.step);
-        if (isNaN(stepNum)) return;
-        s.classList.remove('active', 'completed');
-        if (stepNum < step) s.classList.add('completed');
-        else if (stepNum === step) s.classList.add('active');
+    // Update all pipeline nodes and connecting lines
+    const nodes = document.querySelectorAll('.pipeline .pipe-node');
+    const lines = document.querySelectorAll('.pipeline .pipe-line');
+    const stepOrder = ['1', '2', '3', 'qa-deploy', 'qa-validate'];
+    const activeIdx = stepOrder.indexOf(String(step));
+
+    nodes.forEach(n => {
+        const key = n.dataset.step;
+        const idx = stepOrder.indexOf(key);
+        n.classList.remove('active', 'completed');
+        if (idx < activeIdx) n.classList.add('completed');
+        else if (idx === activeIdx) n.classList.add('active');
+    });
+    lines.forEach((line, i) => {
+        line.classList.toggle('completed', i < activeIdx);
     });
 }
 
 function setQAStep(phase) {
     // phase: null | 'deploy' | 'validate' | 'complete'
-    const deployStep = document.querySelector('[data-step="qa-deploy"]');
-    const validateStep = document.querySelector('[data-step="qa-validate"]');
-    if (!deployStep || !validateStep) return;
-    deployStep.classList.remove('active', 'completed');
-    validateStep.classList.remove('active', 'completed');
+    const deployNode = document.querySelector('[data-step="qa-deploy"]');
+    const validateNode = document.querySelector('[data-step="qa-validate"]');
+    if (!deployNode || !validateNode) return;
+    deployNode.classList.remove('active', 'completed');
+    validateNode.classList.remove('active', 'completed');
+    // Also update connecting lines
+    const lines = document.querySelectorAll('.pipeline .pipe-line');
     if (phase === 'deploy') {
-        deployStep.classList.add('active');
+        deployNode.classList.add('active');
+        if (lines[3]) lines[3].classList.add('completed');
     } else if (phase === 'validate') {
-        deployStep.classList.add('completed');
-        validateStep.classList.add('active');
+        deployNode.classList.add('completed');
+        validateNode.classList.add('active');
+        if (lines[3]) lines[3].classList.add('completed');
+        if (lines[4]) lines[4].classList.add('completed');
     } else if (phase === 'complete') {
-        deployStep.classList.add('completed');
-        validateStep.classList.add('completed');
+        deployNode.classList.add('completed');
+        validateNode.classList.add('completed');
+        if (lines[3]) lines[3].classList.add('completed');
+        if (lines[4]) lines[4].classList.add('completed');
     }
 }
 
@@ -82,10 +97,10 @@ function appendLog(containerId, message) {
 
 // ─── Agent Identity ─────────────────────────────────────────────────────────────
 const AGENTS = {
-    extractor: { name: 'Extractor', role: 'Requirements Agent', letter: 'E', class: 'extractor' },
+    extractor: { name: 'WorkIQ', role: 'Requirements Agent', letter: 'W', class: 'extractor', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png' },
     analyzer:  { name: 'Analyzer',  role: 'Gap Analysis Agent', letter: 'A', class: 'analyzer' },
     builder:   { name: 'Builder',   role: 'Build Agent',        letter: 'B', class: 'builder' },
-    deployer:  { name: 'Deployer',  role: 'Deploy Agent',       letter: 'D', class: 'deployer' },
+    deployer:  { name: 'Deployer',  role: 'Deploy Agent',       letter: 'D', class: 'deployer', logo: 'https://cdn.worldvectorlogo.com/logos/azure-1.svg' },
     validator: { name: 'Validator', role: 'QA Agent',           letter: 'V', class: 'validator' },
 };
 
@@ -95,8 +110,11 @@ function setActiveAgent(agentKey) {
     const badge = document.getElementById('activeAgentBadge');
     if (badge) {
         badge.className = `agent-badge agent-badge--${agent.class}`;
+        const avatarContent = agent.logo
+            ? `<img src="${agent.logo}" alt="${agent.name}" style="width:16px;height:16px;object-fit:contain;">`
+            : agent.letter;
         badge.innerHTML = `
-            <span class="agent-avatar">${agent.letter}</span>
+            <span class="agent-avatar">${avatarContent}</span>
             <span class="agent-name">${agent.name}</span>
             <span class="agent-role">${agent.role}</span>
         `;
@@ -141,6 +159,30 @@ function isNoGap(gap) {
         'compliant', 'complete as-is', 'nothing to', 'no missing',
     ];
     return patterns.some(p => text.includes(p));
+}
+
+// ─── Meeting Banner Toggle ──────────────────────────────────────────────────
+let meetingInfoCache = null;
+function toggleMeetingBanner() {
+    const brand = document.getElementById('meetingSourceBrand');
+    if (!brand) return;
+    brand.classList.toggle('expanded');
+}
+
+function populateMeetingBanner(info) {
+    meetingInfoCache = info;
+    const titleEl = document.getElementById('meetingDetailTitle');
+    const dateEl = document.getElementById('meetingDetailDate');
+    const participantsEl = document.getElementById('meetingDetailParticipants');
+    const summaryEl = document.getElementById('meetingDetailSummary');
+    if (titleEl) titleEl.innerHTML = info.title ? `<strong>Title:</strong> ${escapeHtml(info.title)}` : '';
+    if (dateEl) dateEl.innerHTML = info.date ? `<strong>Date:</strong> ${escapeHtml(info.date)}` : '';
+    if (participantsEl && info.participants && info.participants.length > 0) {
+        participantsEl.innerHTML = `<strong>Participants:</strong> ${info.participants.map(p => escapeHtml(p)).join(', ')}`;
+    }
+    if (summaryEl && info.summary) {
+        summaryEl.innerHTML = `<strong>Summary:</strong> ${escapeHtml(info.summary)}`;
+    }
 }
 
 // ─── Step 1: Analyze Meeting ──────────────────────────────────────────────────
@@ -205,17 +247,20 @@ async function startAnalysis() {
     const liveRight = document.getElementById('liveRightPanel');
     if (liveRight) liveRight.style.display = '';
     const meetingSourceBrand = document.getElementById('meetingSourceBrand');
-    if (meetingSourceBrand) meetingSourceBrand.style.display = 'none';
+    if (meetingSourceBrand) {
+        meetingSourceBrand.style.display = 'none';
+        meetingSourceBrand.classList.remove('expanded');
+    }
     const meetingCard = document.getElementById('meetingCard');
     meetingCard.style.display = 'flex';
     meetingCard.classList.remove('found');
     document.getElementById('meetingCardIcon').className = 'meeting-card-icon';
-    document.getElementById('meetingCardTitle').textContent = 'Extractor is connecting to WorkIQ...';
+    document.getElementById('meetingCardTitle').textContent = 'WorkIQ is connecting to M365...';
     document.getElementById('meetingCardDate').textContent = '';
     document.getElementById('meetingCardParticipants').style.display = 'none';
     document.getElementById('meetingCardAgent').style.display = 'none';
     document.getElementById('meetingCardStatusRow').style.display = 'flex';
-    document.getElementById('meetingCardStatus').textContent = 'Extractor is initializing...';
+    document.getElementById('meetingCardStatus').textContent = 'WorkIQ is initializing...';
 
     // Reset agent log
     document.getElementById('agentLogEntries').innerHTML = '';
@@ -238,16 +283,16 @@ async function startAnalysis() {
                 const cardTitle = document.getElementById('meetingCardTitle');
                 const cardStatus = document.getElementById('meetingCardStatus');
                 if (step === 0) {
-                    cardTitle.textContent = 'Extractor is searching for meeting...';
+                    cardTitle.textContent = 'WorkIQ is searching for meeting...';
                     cardStatus.textContent = 'Connected to WorkIQ';
                     setActiveAgent('extractor');
                 } else if (step === 1) {
-                    cardTitle.textContent = 'Meeting Found by Extractor';
+                    cardTitle.textContent = 'Meeting Found by WorkIQ';
                     cardStatus.textContent = 'Fetching meeting data...';
                 } else if (step === 2) {
-                    cardStatus.textContent = 'Extractor is extracting requirements...';
+                    cardStatus.textContent = 'WorkIQ is extracting requirements...';
                 } else if (step === 3) {
-                    cardStatus.textContent = 'Extractor is creating epic issue...';
+                    cardStatus.textContent = 'WorkIQ is creating epic issue...';
                 }
             });
 
@@ -259,10 +304,12 @@ async function startAnalysis() {
                 // Show Office branding
                 const meetingBrand = document.getElementById('meetingSourceBrand');
                 if (meetingBrand) meetingBrand.style.display = 'flex';
+                // Populate expandable meeting banner details
+                populateMeetingBanner(info);
                 const iconEl = document.getElementById('meetingCardIcon');
                 iconEl.className = 'meeting-card-icon found';
                 iconEl.innerHTML = `<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="48" height="48" style="object-fit: contain;" class="office-logo-img">`;
-                document.getElementById('meetingCardTitle').textContent = 'Meeting Found by Extractor';
+                document.getElementById('meetingCardTitle').textContent = 'Meeting Found by WorkIQ';
                 if (info.date) {
                     document.getElementById('meetingCardDate').textContent = info.date;
                 }
@@ -279,8 +326,8 @@ async function startAnalysis() {
                 const agentAttr = document.getElementById('meetingCardAgent');
                 if (agentAttr) agentAttr.style.display = 'flex';
                 document.getElementById('meetingCardStatus').textContent = info.requirementCount
-                    ? `Extractor processing ${info.requirementCount} requirements...`
-                    : 'Extractor processing requirements...';
+                    ? `WorkIQ processing ${info.requirementCount} requirements...`
+                    : 'WorkIQ processing requirements...';
             });
 
             eventSource.addEventListener('requirements', (e) => {
@@ -461,7 +508,7 @@ async function startGapAnalysis() {
         if (selectedIndices.includes(i)) {
             statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Queued</span>`;
         } else {
-            statusCell.innerHTML = `<span class="status-chip no-gap">Skipped</span>`;
+            statusCell.innerHTML = `<span class="status-chip skipped">Skipped</span>`;
             row.classList.add('no-gap-row');
         }
     });
@@ -741,7 +788,7 @@ function enrichRowWithGap(gap) {
         cells[4].style.display = 'none';
         targetRow.classList.add('no-gap-row');
     } else {
-        cells[2].innerHTML = `<span class="status-chip analyzed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Gap Found</span>`;
+        cells[2].innerHTML = `<span class="status-chip analyzed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg> Gap Found</span>`;
         cells[3].innerHTML = `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${gap.complexity}</span>`;
         cells[3].style.textAlign = 'center';
     }
@@ -807,8 +854,9 @@ function revealCheckboxesForIssues() {
             const gapId = row.dataset.gapId || '0';
             agentTd.innerHTML = `
                 <select class="agent-type-select" data-gap-id="${gapId}" data-row-index="${row.dataset.index}">
-                    <option value="cloud" selected>⚡ Copilot</option>
+                    <option value="cloud" selected>☁️ Cloud</option>
                     <option value="local">💻 Local</option>
+                    <option value="developer">👤 Developer</option>
                 </select>
             `;
         }
@@ -942,6 +990,16 @@ function updateSelectedCount() {
 // ─── Dispatch state ───────────────────────────────────────────────────────────
 let dispatchedGapIds = new Set(); // track which gap IDs have been dispatched
 let dispatchInProgress = false;
+let dispatchTotalItems = 0;
+let dispatchCompletedItems = 0;
+
+function incrementDispatchProgress() {
+    dispatchCompletedItems++;
+    if (dispatchTotalItems > 0) {
+        const percent = Math.min((dispatchCompletedItems / dispatchTotalItems) * 100, 100);
+        document.getElementById('dispatchProgressFill').style.width = `${percent}%`;
+    }
+}
 
 // ─── Step 2: Dispatch Selected (unified: issue creation + agent dispatch) ─────
 async function dispatchSelected() {
@@ -954,11 +1012,14 @@ async function dispatchSelected() {
     // Partition by agent type from unified table dropdowns
     const cloudGaps = [];
     const localGaps = [];
+    const developerGaps = [];
     selectedGaps.forEach(gap => {
         const select = document.querySelector(`.agent-type-select[data-gap-id="${gap.id}"]`);
         const agentType = select ? select.value : 'cloud';
         if (agentType === 'local') {
             localGaps.push(gap);
+        } else if (agentType === 'developer') {
+            developerGaps.push(gap);
         } else {
             cloudGaps.push(gap);
         }
@@ -968,17 +1029,21 @@ async function dispatchSelected() {
     btn.disabled = true;
     const cloudLabel = cloudGaps.length > 0 ? `${cloudGaps.length} cloud` : '';
     const localLabel = localGaps.length > 0 ? `${localGaps.length} local` : '';
-    const dispatchLabel = [cloudLabel, localLabel].filter(Boolean).join(' + ');
+    const devLabel = developerGaps.length > 0 ? `${developerGaps.length} developer` : '';
+    const dispatchLabel = [cloudLabel, localLabel, devLabel].filter(Boolean).join(' + ');
     btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Dispatching ${dispatchLabel}...`;
 
     setStatus('Builder Dispatching...', 'processing');
     setStep(3);
     setActiveAgent('builder');
     dispatchInProgress = true;
+    dispatchTotalItems = selectedGaps.length;
+    dispatchCompletedItems = 0;
+    document.getElementById('dispatchProgressFill').style.width = '0%';
 
     // Build and show the dispatch table on first dispatch
     showPanel('panel-issues');
-    renderDispatchTable(selectedGaps, cloudGaps, localGaps);
+    renderDispatchTable(selectedGaps, cloudGaps, localGaps, developerGaps);
     document.getElementById('issueLogEntries').innerHTML = '';
 
     // Show epic link if available
@@ -1004,6 +1069,11 @@ async function dispatchSelected() {
         if (localGaps.length > 0) {
             promises.push(dispatchLocalFromGaps(localGaps));
             promiseLabels.push('local');
+        }
+
+        if (developerGaps.length > 0) {
+            promises.push(dispatchDeveloperFromGaps(developerGaps));
+            promiseLabels.push('developer');
         }
 
         const settled = await Promise.allSettled(promises);
@@ -1043,7 +1113,7 @@ async function dispatchSelected() {
             }
         });
 
-        // Update dispatch progress to 100%
+        // Update dispatch progress to 100% (ensure final state)
         document.getElementById('dispatchProgressFill').style.width = '100%';
 
         setStep(4);
@@ -1071,7 +1141,7 @@ async function dispatchSelected() {
 }
 
 // ─── Render Dispatch Table ────────────────────────────────────────────────────
-function renderDispatchTable(selectedGaps, cloudGaps, localGaps) {
+function renderDispatchTable(selectedGaps, cloudGaps, localGaps, developerGaps = []) {
     const tbody = document.getElementById('dispatchTableBody');
 
     // If first dispatch, render all gaps (dispatching ones first, then remaining)
@@ -1092,12 +1162,14 @@ function renderDispatchTable(selectedGaps, cloudGaps, localGaps) {
 
     const cloudIds = new Set(cloudGaps.map(g => g.id));
     const localIds = new Set(localGaps.map(g => g.id));
+    const developerIds = new Set(developerGaps.map(g => g.id));
 
     sorted.forEach((gap, i) => {
         const isDispatching = selectedIds.has(gap.id);
         const wasDispatched = dispatchedGapIds.has(gap.id);
         const isCloud = cloudIds.has(gap.id);
         const isLocal = localIds.has(gap.id);
+        const isDeveloper = developerIds.has(gap.id);
 
         const tr = document.createElement('tr');
         tr.id = `dispatch-row-${gap.id}`;
@@ -1114,17 +1186,19 @@ function renderDispatchTable(selectedGaps, cloudGaps, localGaps) {
 
         // Mode badge
         let modeBadge = '';
-        if (isCloud || (wasDispatched && !isLocal)) {
-            modeBadge = `<span class="dispatch-mode-badge cloud"><svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" class="copilot-dispatch-icon"><path d="M7.998 0a8 8 0 0 0-2.528 15.59c.4.074.546-.174.546-.386 0-.19-.007-.694-.01-1.362-2.226.484-2.695-1.074-2.695-1.074-.364-.924-.889-1.17-.889-1.17-.726-.496.055-.486.055-.486.803.057 1.225.824 1.225.824.714 1.222 1.873.87 2.329.665.073-.517.279-.87.508-1.07-1.777-.201-3.644-.888-3.644-3.953 0-.874.312-1.588.823-2.147-.083-.202-.357-1.015.077-2.117 0 0 .672-.215 2.2.82A7.673 7.673 0 0 1 8 3.868a7.68 7.68 0 0 1 2.003.27c1.527-1.035 2.198-.82 2.198-.82.435 1.102.162 1.915.08 2.117.512.56.822 1.273.822 2.147 0 3.073-1.87 3.749-3.653 3.947.287.248.543.735.543 1.481 0 1.07-.01 1.933-.01 2.196 0 .214.144.463.55.385A8.002 8.002 0 0 0 7.998 0z"/></svg> Copilot</span>`;
+        if (isCloud || (wasDispatched && !isLocal && !isDeveloper)) {
+            modeBadge = `<span class="dispatch-mode-badge cloud"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg> Cloud</span>`;
         } else if (isLocal) {
             modeBadge = `<span class="dispatch-mode-badge local"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg> Local</span>`;
+        } else if (isDeveloper) {
+            modeBadge = `<span class="dispatch-mode-badge developer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Developer</span>`;
         } else {
             modeBadge = `<span class="dispatch-mode-badge pending">—</span>`;
         }
 
         // Issue column
         let issueCell = '';
-        if (isDispatching && isCloud) {
+        if (isDispatching && (isCloud || isDeveloper)) {
             issueCell = `<span class="dispatch-issue-pending"><span class="status-chip-dot"></span> Creating...</span>`;
         } else if (wasDispatched) {
             issueCell = `<span class="text-muted">—</span>`;
@@ -1176,6 +1250,9 @@ function updateDispatchRowStatus(gapId, status, extra) {
         if (row) { row.classList.remove('dispatching'); row.classList.add('dispatched'); }
     } else if (status === 'completed') {
         statusCell.innerHTML = `<span class="status-chip completed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Completed</span>`;
+        if (row) { row.classList.remove('dispatching'); row.classList.add('dispatched'); }
+    } else if (status === 'implemented') {
+        statusCell.innerHTML = `<span class="status-chip implemented"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Implemented</span>`;
         if (row) { row.classList.remove('dispatching'); row.classList.add('dispatched'); }
     } else if (status === 'working') {
         statusCell.innerHTML = `<span class="status-chip working"><span class="status-chip-dot"></span> Working</span>`;
@@ -1426,6 +1503,8 @@ async function dispatchCloudFromGaps(cloudGaps) {
 
                 // Update dispatch table row
                 updateDispatchRowStatus(gapId, result.assigned ? 'assigned' : 'failed');
+                // Increment progress bar for this completed item
+                incrementDispatchProgress();
 
                 appendLog('issueLogEntries', result.assigned
                     ? `  ✅ #${result.issueNumber} → Copilot Coding Agent assigned`
@@ -1495,7 +1574,9 @@ async function dispatchLocalFromGaps(localGaps) {
                 results.push({ gapId: data.id, assigned: data.success, message: data.summary });
 
                 // Update dispatch table
-                updateDispatchRowStatus(data.id, data.success ? 'completed' : 'failed');
+                updateDispatchRowStatus(data.id, data.success ? 'implemented' : 'failed');
+                // Increment progress bar for this completed item
+                incrementDispatchProgress();
 
                 // Update issue column with summary snippet
                 const issueCell = document.getElementById(`dispatch-issue-${data.id}`);
@@ -1518,6 +1599,87 @@ async function dispatchLocalFromGaps(localGaps) {
             } else if (eventType === 'item-progress') {
                 const { id, message } = JSON.parse(eventData);
                 appendLog('issueLogEntries', `  ⚙ [Gap ${id}] ${message}`);
+            } else if (eventType === 'log') {
+                const { message } = JSON.parse(eventData);
+                appendLog('issueLogEntries', message);
+            } else if (eventType === 'error') {
+                const { error } = JSON.parse(eventData);
+                throw new Error(error);
+            }
+        }
+    }
+
+    return results;
+}
+
+// ─── Developer dispatch: create issues but do NOT assign coding agent ─────────
+async function dispatchDeveloperFromGaps(devGaps) {
+    const selectedIds = devGaps.map(g => g.id);
+    appendLog('issueLogEntries', `👤 Creating ${selectedIds.length} issue(s) for developers on GitHub...`);
+
+    const gapByTitle = {};
+    devGaps.forEach(g => { gapByTitle[g.requirement.trim()] = g.id; });
+
+    const response = await fetch('/api/create-issues', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ selectedIds }),
+    });
+
+    if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to create issues');
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let newIssues = [];
+    let results = [];
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split('\n\n');
+        buffer = chunks.pop();
+
+        for (const chunk of chunks) {
+            if (!chunk.trim()) continue;
+            const lines = chunk.split('\n');
+            let eventType = '', eventData = '';
+            for (const line of lines) {
+                if (line.startsWith('event: ')) eventType = line.slice(7);
+                if (line.startsWith('data: ')) eventData = line.slice(6);
+            }
+            if (!eventType || !eventData) continue;
+
+            if (eventType === 'issue') {
+                const { issue } = JSON.parse(eventData);
+                newIssues.push(issue);
+                createdIssues.push(issue);
+                appendLog('issueLogEntries', `  ✅ Issue #${issue.number}: ${issue.title} (for developer)`);
+
+                let matchedGapId = issue.gapId || null;
+                if (!matchedGapId) {
+                    for (const g of devGaps) {
+                        if (issue.title && issue.title.includes(g.requirement.substring(0, 40))) {
+                            matchedGapId = g.id;
+                            break;
+                        }
+                    }
+                }
+                if (!matchedGapId && newIssues.length <= devGaps.length) {
+                    matchedGapId = devGaps[newIssues.length - 1].id;
+                }
+
+                if (matchedGapId) {
+                    updateDispatchRowIssue(matchedGapId, issue);
+                    updateDispatchRowStatus(matchedGapId, 'assigned');
+                    results.push({ gapId: matchedGapId, issueNumber: issue.number, assigned: true, message: 'Issue created for developer' });
+                    // Increment progress bar for this completed item
+                    incrementDispatchProgress();
+                }
             } else if (eventType === 'log') {
                 const { message } = JSON.parse(eventData);
                 appendLog('issueLogEntries', message);
@@ -1571,6 +1733,8 @@ function resetApp() {
     previousPanel = 'panel-analyze';
     dispatchedGapIds = new Set();
     dispatchInProgress = false;
+    dispatchTotalItems = 0;
+    dispatchCompletedItems = 0;
     setStep(1);
     setStatus('Ready', '');
     showPanel('panel-analyze');
@@ -1587,10 +1751,8 @@ function resetApp() {
         if (buildLabel) buildLabel.classList.add('active');
         if (qaLabel) qaLabel.classList.remove('active');
     }
-    const buildTrack = document.getElementById('trackBuild');
-    const qaTrack = document.getElementById('trackQA');
-    if (buildTrack) buildTrack.classList.add('active');
-    if (qaTrack) qaTrack.classList.remove('active');
+    const buildTrack = null;
+    const qaTrack = null;
     setQAStep(null);
     const qaUrlBar = document.getElementById('qaDeployUrlBar');
     if (qaUrlBar) qaUrlBar.style.display = 'none';
@@ -1612,23 +1774,17 @@ function toggleQAMode() {
     const sw = document.getElementById('fabQA');
     const buildLabel = sw.querySelector('.mode-switch-label--build');
     const qaLabel = sw.querySelector('.mode-switch-label--qa');
-    const buildTrack = document.getElementById('trackBuild');
-    const qaTrack = document.getElementById('trackQA');
 
     if (qaMode) {
         sw.classList.add('active');
         buildLabel.classList.remove('active');
         qaLabel.classList.add('active');
-        if (buildTrack) buildTrack.classList.remove('active');
-        if (qaTrack) qaTrack.classList.add('active');
         try { buildQAGapTable(); } catch (e) { console.warn('buildQAGapTable error:', e); }
         showPanel('panel-qa');
     } else {
         sw.classList.remove('active');
         buildLabel.classList.add('active');
         qaLabel.classList.remove('active');
-        if (buildTrack) buildTrack.classList.add('active');
-        if (qaTrack) qaTrack.classList.remove('active');
         showPanel(previousPanel);
     }
 }
@@ -1660,7 +1816,7 @@ function buildQAGapTable() {
         const vr = validationMap[req.trim()];
 
         let statusHtml = '';
-        let complexityHtml = '<span class="text-muted">\u2014</span>';
+
 
         if (vr) {
             if (vr.passed) {
@@ -1678,16 +1834,13 @@ function buildQAGapTable() {
             statusHtml = '<span class="status-chip pending">Pending</span>';
         }
 
-        if (gap && gap.hasGap) {
-            complexityHtml = `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${gap.complexity}</span>`;
-        }
+
 
         if (gap && !gap.hasGap && !vr) tr.classList.add('no-gap-row');
 
         tr.innerHTML = `
             <td><div class="td-requirement">${escapeHtml(req)}</div></td>
             <td>${statusHtml}</td>
-            <td>${complexityHtml}</td>
         `;
         tbody.appendChild(tr);
 
@@ -1777,6 +1930,11 @@ async function launchQAWorkflow() {
     wfDeploy.classList.add('active');
     wfDeploy.classList.remove('done', 'failed');
     wfValidate.classList.remove('active', 'done', 'failed');
+    // Reset label & icon in case previous run showed "Not Passed"
+    const resetLabel = wfValidate.querySelector('.qa-wf-step-label');
+    if (resetLabel) resetLabel.textContent = 'Validating';
+    const resetIcon = wfValidate.querySelector('.qa-wf-step-icon--validate');
+    if (resetIcon) resetIcon.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>';
 
     buildQAGapTable();
     appendLog('qaWorkflowLogEntries', `🤖 Agent: Deployer starting...`);
@@ -1804,15 +1962,20 @@ async function launchQAWorkflow() {
         await runValidation(deployUrl);
 
         wfValidate.classList.remove('active');
-        wfValidate.classList.add('done');
 
         const passed = validationResults.filter(v => v.passed).length;
         const total = validationResults.length;
         const failed = total - passed;
+        const validateLabel = wfValidate.querySelector('.qa-wf-step-label');
+        const validateIcon = wfValidate.querySelector('.qa-wf-step-icon--validate');
         if (passed === total && total > 0) {
+            wfValidate.classList.add('done');
             setStatus(`Validator: All ${total} Passed — Ship it!`, '');
             appendLog('qaWorkflowLogEntries', `\u2705 Validator complete: ${passed}/${total} passed. All meeting requirements met.`);
         } else {
+            wfValidate.classList.add('failed');
+            if (validateLabel) validateLabel.textContent = 'Not Passed';
+            if (validateIcon) validateIcon.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>';
             setStatus(`Validator: ${failed} of ${total} Failed`, 'error');
             appendLog('qaWorkflowLogEntries', `\u274C Validator report: ${passed} passed, ${failed} failed out of ${total}. Not ready to ship.`);
         }
@@ -2088,8 +2251,8 @@ document.addEventListener('DOMContentLoaded', () => {
     showPanel('panel-analyze');
     updateQAFabVisibility();
 
-    // Make all stepper steps clickable
-    document.querySelectorAll('.stepper .step[data-step]').forEach(stepEl => {
+    // Make all pipeline nodes clickable
+    document.querySelectorAll('.pipeline .pipe-node[data-step]').forEach(stepEl => {
         stepEl.addEventListener('click', () => {
             const key = stepEl.dataset.step;
             navigateToStep(key);

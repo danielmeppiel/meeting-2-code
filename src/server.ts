@@ -360,11 +360,11 @@ const PORT = process.env.PORT || 3000;
 // Reset corporate-website repo to clean state on startup (demo reset)
 resetCorpWebsiteRepo().then(() => {
     app.listen(PORT, () => {
-        console.log(`\n🚀 Meeting-2-Code running at http://localhost:${PORT}\n`);
+        console.log(`\n🚀 Meeting-2-Ship running at http://localhost:${PORT}\n`);
     });
 }).catch((err) => {
     console.warn("[startup] Repo reset warning:", err instanceof Error ? err.message : String(err));
     app.listen(PORT, () => {
-        console.log(`\n🚀 Meeting-2-Code running at http://localhost:${PORT}\n`);
+        console.log(`\n🚀 Meeting-2-Ship running at http://localhost:${PORT}\n`);
     });
 });

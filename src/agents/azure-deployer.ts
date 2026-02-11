@@ -76,15 +76,12 @@ async function checkExistingDeployment(log: (msg: string) => void): Promise<stri
 async function mergeLocalAgentBranches(log: (msg: string) => void): Promise<string[]> {
     const merged: string[] = [];
     try {
-        // Fetch latest from origin
-        await run("git fetch origin --prune", log, 30_000);
-
         // Ensure we are on main
         await run("git checkout main", log, 10_000);
 
-        // List remote feature/gap-* branches
+        // List LOCAL feature/gap-* branches (created by the local agent)
         const { stdout } = await execAsync(
-            "git branch -r --list 'origin/feature/gap-*' | sed 's|origin/||' | tr -d ' '",
+            "git branch --list 'feature/gap-*' | tr -d ' '",
             { cwd: REPO_PATH, timeout: 10_000 },
         );
         const branches = stdout.trim().split("\n").filter(Boolean);
@@ -98,7 +95,7 @@ async function mergeLocalAgentBranches(log: (msg: string) => void): Promise<stri
 
         for (const branch of branches) {
             try {
-                await run(`git merge origin/${branch} --no-edit -m "Merge ${branch} into main for deploy"`, log, 15_000);
+                await run(`git merge ${branch} --no-edit -m "Merge ${branch} into main for deploy"`, log, 15_000);
                 log(`Merged: ${branch}`);
                 merged.push(branch);
             } catch (mergeErr) {

@@ -24,6 +24,59 @@ export interface MeetingResult {
     requirements: string[];
 }
 
+// ── Parsing helper ─────────────────────────────────────────────────────────
+
+function parseMeetingResponse(
+    content: string,
+    fallbackInfo: MeetingInfo,
+    onMeetingInfo: (info: MeetingInfo) => void,
+    log: (msg: string) => void,
+): { requirements: string[]; info: MeetingInfo } {
+    let requirements: string[] = [];
+    let info = { ...fallbackInfo };
+
+    try {
+        const jsonObjMatch = content.match(/\{[\s\S]*\}/);
+        if (jsonObjMatch) {
+            const parsed = JSON.parse(jsonObjMatch[0]);
+            if (parsed.requirements && Array.isArray(parsed.requirements)) {
+                requirements = parsed.requirements.filter((r: unknown) => typeof r === "string" && r.trim().length > 0);
+                info = {
+                    title: parsed.title || fallbackInfo.title,
+                    date: parsed.date,
+                    participants: parsed.participants,
+                    summary: parsed.summary,
+                    requirementCount: requirements.length,
+                };
+                onMeetingInfo(info);
+                log(`Meeting: "${info.title}"`);
+                if (parsed.participants?.length) {
+                    log(`Participants: ${parsed.participants.join(", ")}`);
+                }
+            }
+        }
+        if (requirements.length === 0) {
+            const jsonArrMatch = content.match(/\[[\s\S]*\]/);
+            const arr = JSON.parse(jsonArrMatch?.[0] || "[]");
+            requirements = Array.isArray(arr) ? arr.filter((r: unknown) => typeof r === "string" && r.trim().length > 0) : [];
+            info.requirementCount = requirements.length;
+            onMeetingInfo(info);
+        }
+        log(`Parsed ${requirements.length} requirements`);
+    } catch {
+        log("Response wasn't valid JSON, parsing as text lines...");
+        requirements = content
+            .split("\n")
+            .map((l: string) => l.replace(/^[\d\-.*]+\s*/, "").trim())
+            .filter((l: string) => l.length > 10);
+        info.requirementCount = requirements.length;
+        onMeetingInfo(info);
+        log(`Extracted ${requirements.length} lines from text`);
+    }
+
+    return { requirements, info };
+}
+
 // ── Phase 1: Extract meeting requirements via WorkIQ ───────────────────────
 
 interface ExtractOptions {
@@ -41,7 +94,7 @@ export async function extractMeetingRequirements(
     const onMeetingInfo = options.onMeetingInfo ?? (() => {});
     const log = options.onLog ?? (() => {});
 
-    progress(0, "Connecting to WorkIQ MCP Server...");
+    progress(0, "Connecting to M365 MCP Server...");
     log("Initializing WorkIQ MCP session (npx @microsoft/workiq mcp)...");
     console.log("[gap-analyzer] Creating WorkIQ MCP session...");
 
@@ -53,15 +106,22 @@ export async function extractMeetingRequirements(
             model: "gpt-5.2-codex",
             mcpServers: options.workiqMcp,
             systemMessage: {
-                content: `You are a meeting analyst that retrieves meeting data from Microsoft 365 via WorkIQ.
+                content: `You are a meeting analyst. Your ONLY purpose: retrieve meeting data from Microsoft 365 using WorkIQ tools.
 
-CRITICAL RULES:
-- You MUST use the WorkIQ meeting/calendar tools to search for and retrieve meetings from Microsoft 365.
-- Do NOT use filesystem tools like glob, view, grep, or any file browsing tools.
-- Do NOT read or search local files or directories.
-- Your ONLY job is to call WorkIQ tools to find the meeting titled "Contoso Industries Redesign" and extract its content.
+## Tool Usage — MANDATORY
+1. You MUST call WorkIQ tools to search for meetings. These are the ONLY tools you should use.
+2. NEVER call filesystem tools (glob, view, grep, read_file, list_directory, etc.). They are IRRELEVANT to your task.
+3. If a tool call fails or returns no results, try different search queries (see Search Strategy below).
 
-After retrieving the meeting notes/transcript, return a JSON object with this exact structure:
+## Search Strategy
+Search for the meeting using MULTIPLE approaches if needed:
+- First try: search for "Contoso Industries Redesign"
+- If no results: search for "Contoso" alone
+- If no results: search for "Redesign"
+- If no results: list recent meetings/calendar events and find the most relevant one about Contoso or a website redesign
+
+## Output Format
+After retrieving the meeting data, return ONLY a JSON object:
 {
   "title": "the meeting title",
   "date": "meeting date/time if available",
@@ -69,7 +129,9 @@ After retrieving the meeting notes/transcript, return a JSON object with this ex
   "summary": "A brief 2-3 sentence summary of the key decisions and topics discussed",
   "requirements": ["requirement 1", "requirement 2", ...]
 }
-Only output the JSON object, nothing else.`,
+
+Requirements should be specific, actionable items — things that need to change in code/design.
+Do NOT output anything before or after the JSON object.`,
             },
             label: "workiq-meeting",
             onLog: log,
@@ -80,63 +142,52 @@ Only output the JSON object, nothing else.`,
         console.log("[gap-analyzer] Sending WorkIQ query...");
 
         const meetingResult = await meetingSession.sendAndWait({
-            prompt: `Use the WorkIQ meeting/calendar tools (NOT filesystem tools) to search for the latest meeting with the subject or title containing "Contoso Industries Redesign".
-Retrieve the full meeting notes and/or transcript.
-Then extract all actionable requirements, decisions, and action items.
+            prompt: `Find the meeting about "Contoso Industries Redesign" in my Microsoft 365 calendar.
 
-Return a JSON object with:
-- title: the meeting subject/title
-- date: when the meeting occurred
-- participants: array of attendee names
-- summary: a brief 2-3 sentence summary of the key discussions and decisions
-- requirements: array of requirement strings
+Step-by-step:
+1. Use the WorkIQ search/calendar tools to search for this meeting. Try the full title first: "Contoso Industries Redesign".
+2. If that returns nothing, search for just "Contoso".
+3. If still nothing, list my recent meetings and pick the one about Contoso or a website redesign.
+4. Once you find the meeting, retrieve its full notes, transcript, or body content.
+5. Extract all actionable requirements, decisions, and action items from the content.
 
-IMPORTANT: Do NOT use glob, view, grep, or any file-browsing tools. Only use WorkIQ/meeting tools.`,
+Return the JSON object with title, date, participants, summary, and requirements array.
+
+IMPORTANT: Do NOT use glob, view, grep, read_file, or any filesystem tools. Only use WorkIQ/meeting/calendar tools.`,
         }, 300_000);
         const meetingContent = meetingResult?.data?.content || "{}";
         console.log("[gap-analyzer] WorkIQ response:", meetingContent.substring(0, 500));
         log(`Agent response received (${meetingContent.length} chars)`);
-        await meetingSession.destroy();
 
         // Parse meeting info + requirements
-        try {
-            const jsonObjMatch = meetingContent.match(/\{[\s\S]*\}/);
-            if (jsonObjMatch) {
-                const parsed = JSON.parse(jsonObjMatch[0]);
-                if (parsed.requirements && Array.isArray(parsed.requirements)) {
-                    requirements = parsed.requirements;
-                    info = {
-                        title: parsed.title || "Contoso Industries Redesign",
-                        date: parsed.date,
-                        participants: parsed.participants,
-                        summary: parsed.summary,
-                        requirementCount: requirements.length,
-                    };
-                    onMeetingInfo(info);
-                    log(`Meeting: "${info.title}"`);
-                    if (parsed.participants?.length) {
-                        log(`Participants: ${parsed.participants.join(", ")}`);
-                    }
-                }
-            }
-            if (requirements.length === 0) {
-                const jsonArrMatch = meetingContent.match(/\[[\s\S]*\]/);
-                requirements = JSON.parse(jsonArrMatch?.[0] || "[]");
-                if (!Array.isArray(requirements)) requirements = [];
-                info.requirementCount = requirements.length;
-                onMeetingInfo(info);
-            }
-            log(`Parsed ${requirements.length} requirements`);
-        } catch {
-            log("Response wasn't valid JSON, parsing as text lines...");
-            requirements = meetingContent
-                .split("\n")
-                .map((l: string) => l.replace(/^[\d\-.*]+\s*/, "").trim())
-                .filter((l: string) => l.length > 10);
-            info.requirementCount = requirements.length;
-            onMeetingInfo(info);
-            log(`Extracted ${requirements.length} lines from text`);
+        ({ requirements, info } = parseMeetingResponse(meetingContent, info, onMeetingInfo, log));
+
+        // ── Retry with broader search if first attempt found nothing ──────
+        if (requirements.length === 0) {
+            log("No requirements found on first attempt — retrying with broader search...");
+            console.log("[gap-analyzer] Retry: broader WorkIQ search...");
+
+            const retryResult = await meetingSession.sendAndWait({
+                prompt: `The previous search didn't return meeting content. Try again with these strategies IN ORDER:
+
+1. List ALL my recent meetings or calendar events from the last 30 days.
+2. Look for any meeting with "Contoso" in the title, body, or attendees.
+3. If you find it, retrieve the full notes/transcript/body.
+4. Extract actionable requirements from the content.
+
+Return the same JSON format: { title, date, participants, summary, requirements: [...] }
+
+CRITICAL: Only use WorkIQ/calendar tools. Do NOT use filesystem tools.`,
+            }, 180_000);
+
+            const retryContent = retryResult?.data?.content || "{}";
+            console.log("[gap-analyzer] Retry response:", retryContent.substring(0, 500));
+            log(`Retry response received (${retryContent.length} chars)`);
+
+            ({ requirements, info } = parseMeetingResponse(retryContent, info, onMeetingInfo, log));
         }
+
+        await meetingSession.destroy();
     } catch (err) {
         console.error("[gap-analyzer] WorkIQ MCP error:", err);
         log(`❌ WorkIQ MCP error: ${err instanceof Error ? err.message : String(err)}`);
