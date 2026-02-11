@@ -1879,7 +1879,7 @@ function buildQAGapTable() {
                 detailContent += `
                     <div class="detail-item detail-item-full">
                         <span class="detail-label">Validation Result</span>
-                        <span class="detail-value">${escapeHtml(vr.evidence || vr.message || (vr.passed ? 'Passed' : 'Failed'))}</span>
+                        <span class="detail-value">${escapeHtml(vr.details || vr.evidence || vr.message || (vr.passed ? 'Passed' : 'Failed'))}</span>
                     </div>`;
             }
 
@@ -2295,7 +2295,7 @@ function updateQATableRowWithValidation(result) {
 
     // Update or create the expandable detail row with validation evidence
     let detailRow = document.getElementById(`qa-detail-${rowIdx}`);
-    const evidence = result.evidence || result.message || (result.passed ? 'Passed' : 'Failed');
+    const evidence = result.details || result.evidence || result.message || (result.passed ? 'Passed' : 'Failed');
     if (detailRow) {
         // Append validation evidence to existing detail
         const grid = detailRow.querySelector('.detail-grid');
