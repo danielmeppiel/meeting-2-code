@@ -7,7 +7,7 @@
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -15,13 +15,14 @@
   "type": "module",
   "dependencies": {
     "@github/copilot-sdk": "^0.1.23",
-    "@types/node": "^25.2.2",
     "express": "^5.2.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/express": "^5.0.6"
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.2.3",
+    "vitest": "^4.0.18"
   }
 }
