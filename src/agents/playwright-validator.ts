@@ -463,97 +463,183 @@ function formatAuditEvidence(audit: Record<string, unknown>): string {
     return r;
 }
 
-// ── AI Judge ──────────────────────────────────────────────────────────────────
+// ── Per-Requirement Sub-Agent Evaluation ──────────────────────────────────────
 
-async function evaluateRequirements(
+/**
+ * Evaluates a SINGLE requirement by spawning a dedicated sub-agent session.
+ * Each sub-agent is an expert QA tester focused exclusively on one requirement,
+ * given the full site evidence. This prevents the "averaging" effect where a
+ * single model evaluating many requirements tends to be lenient.
+ */
+async function evaluateSingleRequirement(
     client: CopilotClient,
     audit: Record<string, unknown>,
-    requirements: string[],
+    requirement: string,
+    reqIndex: number,
     log: (msg: string) => void,
-): Promise<ValidationResult[]> {
+): Promise<ValidationResult> {
     const evidence = formatAuditEvidence(audit);
 
-    log('Creating strict QA evaluation session...');
     const session = await createAgentSession(client, {
-        model: "claude-sonnet-4",
+        model: "claude-opus-4.6",
         mcpServers: {},
         systemMessage: {
-            content: `You are the STRICTEST QA lead performing final acceptance testing on a deployed website.
+            content: `You are an EXTREMELY strict, adversarial QA tester. Your ONLY job is to determine whether ONE specific website requirement is met, based on real browser evidence collected by Playwright.
 
-You are given DETAILED EVIDENCE collected by a real Playwright browser from a live website.
-For each requirement you must determine PASS or FAIL based ONLY on the evidence.
+## YOUR MINDSET
+You are trying to FIND FAILURES. You are not trying to be helpful or give the benefit of the doubt. You are a hostile auditor. If there is ANY ambiguity, the requirement FAILS. If any sub-part is missing, the ENTIRE requirement FAILS. Partial credit does not exist.
 
-## YOUR RULES — NO EXCEPTIONS
+## DECOMPOSITION RULES
+Before evaluating, you MUST decompose the requirement into every individual testable claim. Then check EACH claim against the evidence independently. If even ONE claim fails, the entire requirement fails.
 
-1. **EXACT MATCH for text requirements**: If a requirement specifies exact wording (e.g., a headline, tagline, or specific text), the EXACT words must appear in the correct HTML element. Finding similar words somewhere on the page is NOT enough. An <h1> must contain the exact headline text. A tagline must be visible in the hero section.
+Example: "Contact form must be GDPR compliant with cookie consent, mandatory privacy policy checkbox/link, and reCAPTCHA spam protection"
+Decompose to:
+  a) Contact form exists → check forms evidence
+  b) Cookie consent mechanism present → check cookieConsent evidence AND form checkboxes
+  c) Mandatory privacy policy checkbox OR link in/near the form → check hasPrivacyCheckbox AND hasPrivacyLink
+  d) reCAPTCHA or equivalent spam protection → check hasRecaptcha evidence
+  ALL four must pass. If reCAPTCHA is false, the whole requirement FAILS regardless of everything else.
 
-2. **FUNCTIONAL requirements must be functionally verified**: If a requirement says "CTA funnels users to the contact form", the CTA navigation test MUST show it actually navigates to a page/section with a contact form. Just having a button that says "Contact" is not enough — the click-through test must confirm the destination.
+Example: "Collect full name, business email, company name, phone, and message"
+Decompose to:
+  a) Field for full name → look for input with name/placeholder/label matching "name"
+  b) Field for business email → look for email-type input
+  c) Field for company name → look for input with name/placeholder/label matching "company"
+  d) Field for phone → look for tel-type input or phone-related name/placeholder
+  e) Field for message → look for textarea
+  f) Email validation → look for type="email" or pattern attribute
+  g) Phone validation → look for type="tel" or pattern attribute
+  ALL must be present. Missing "company name" field = FAIL even if other fields exist.
 
-3. **ALL sub-requirements must pass**: If a requirement lists multiple things (e.g., "cookie consent, privacy policy checkbox, AND reCAPTCHA"), then ALL of them must be present. Partial = FAIL.
+## EVIDENCE INTERPRETATION RULES
 
-4. **Dedicated page means a SEPARATE page**: "Move X to a dedicated page" means a distinct URL with that content. Not just a section on the home page. The page probe results must show the page exists at a real URL and was NOT redirected to home.
+1. **Form fields**: Check the ACTUAL field inventory (tag, type, name, placeholder, aria-label). A form with only [name, email, message] does NOT satisfy a requirement for [name, email, company, phone, message]. Count the actual fields.
 
-5. **Performance thresholds are non-negotiable**: If a requirement says "speed score exceeds 85", you must evaluate the measured performance metrics. Without a real Lighthouse score, assess based on load times: mobile load > 3s or FCP > 2.5s = likely below 85. Be honest about what we can and cannot measure.
+2. **reCAPTCHA/CAPTCHA**: The evidence explicitly reports hasRecaptcha as true/false. If false, there is no spam protection. Do NOT assume any other mechanism exists unless explicitly shown in evidence.
 
-6. **Font requirements need computed style proof**: "Use Inter font family" means the computed font-family on headings AND body text must actually resolve to Inter. Just importing the stylesheet is not enough — the computed styles must show Inter.
+3. **Cookie consent**: Check BOTH the cookieConsent banner evidence AND form-level cookie checkboxes. A cookie consent banner != cookie consent checkbox in a form. They are different things. The requirement may ask for one or both.
 
-7. **Page existence requirements**: "Publish privacy policy and cookie policy pages" means those pages must exist at accessible URLs, have real content, and not redirect to the home page.
+4. **Privacy policy**: A "mandatory privacy policy checkbox" means an actual checkbox element in/near the form whose label text references "privacy" or "policy". hasPrivacyCheckbox in the evidence directly answers this.
 
-8. **Content completeness**: If a requirement says "Include X, Y, and Z details", ALL of X, Y, and Z must be present in the appropriate section. Finding one out of three = FAIL.
+5. **Text matching**: If exact text is specified (headlines, taglines), it must appear EXACTLY in the corresponding element. "Innovating for Tomorrow" in an <h1> is NOT the same as "Innovation for Tomorrow's World".
+
+6. **Dedicated pages**: A page that returns 200 but redirects to home (redirectedToHome: true) does NOT count as existing.
+
+7. **Computed fonts**: Check the actual computed font-family strings, not just whether a stylesheet was imported.
+
+8. **Performance**: Mobile load > 3000ms or FCP > 2500ms likely means below a score of 85.
 
 ## OUTPUT FORMAT
-
-Return ONLY a JSON array. No markdown fences, no commentary before or after.
-Each element:
+Return ONLY valid JSON (no markdown fences, no text before/after):
 {
-  "requirementIndex": <0-based>,
   "passed": true | false,
-  "details": "<2-3 sentences: cite the SPECIFIC evidence (or lack thereof) that determined your verdict. Quote actual values from the evidence like exact heading text, computed font families, navigation results, page probe results.>"
+  "decomposition": ["claim 1 → PASS/FAIL: evidence", "claim 2 → PASS/FAIL: evidence", ...],
+  "details": "2-3 sentence summary citing specific evidence values that determined PASS or FAIL"
 }`,
         },
-        label: 'qa-judge',
-        onLog: log,
+        label: `qa-req-${reqIndex + 1}`,
+        onLog: (msg) => log(`[Req ${reqIndex + 1}] ${msg}`),
     });
 
-    const reqList = requirements.map((r, i) => `${i + 1}. ${r}`).join('\n');
-
-    log('Sending evidence to QA judge for strict evaluation...');
-    const result = await session.sendAndWait({
-        prompt: `## EVIDENCE COLLECTED FROM LIVE SITE BY PLAYWRIGHT
+    try {
+        const result = await session.sendAndWait({
+            prompt: `## EVIDENCE COLLECTED BY PLAYWRIGHT FROM THE LIVE DEPLOYED SITE
 
 ${evidence}
 
 ---
 
-## REQUIREMENTS TO EVALUATE (be ruthlessly strict)
+## THE ONE REQUIREMENT YOU MUST EVALUATE
 
-${reqList}
+Requirement #${reqIndex + 1}: "${requirement}"
 
-Evaluate EACH requirement. Return ONLY a JSON array.`,
-    }, 180_000);
+Decompose this requirement into every individual testable claim. Check each claim against the evidence. If ANY claim fails, the whole requirement FAILS. Return your judgment as JSON.`,
+        }, 120_000);
 
-    const content = result?.data?.content || '[]';
-    await session.destroy();
+        const content = result?.data?.content || '{}';
+        await session.destroy();
 
-    try {
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
-        const parsed = JSON.parse(jsonMatch?.[0] || '[]');
-        return parsed.map((item: any, i: number) => ({
-            requirementIndex: item.requirementIndex ?? i,
-            requirement: requirements[item.requirementIndex ?? i] || requirements[i] || '',
-            passed: item.passed === true,
-            details: item.details || 'No evaluation details',
-        }));
-    } catch {
-        log('Failed to parse AI judge response, marking all as failed');
-        log(`Raw response (first 500): ${content.substring(0, 500)}`);
-        return requirements.map((req, i) => ({
-            requirementIndex: i,
-            requirement: req,
+        try {
+            const jsonMatch = content.match(/\{[\s\S]*\}/);
+            const parsed = JSON.parse(jsonMatch?.[0] || '{}');
+
+            const decomp = parsed.decomposition;
+            const decompStr = Array.isArray(decomp) ? `\nDecomposition:\n${decomp.map((d: string) => `  • ${d}`).join('\n')}` : '';
+
+            return {
+                requirementIndex: reqIndex,
+                requirement,
+                passed: parsed.passed === true,
+                details: (parsed.details || 'No evaluation details') + decompStr,
+            };
+        } catch {
+            log(`[Req ${reqIndex + 1}] Failed to parse sub-agent response`);
+            log(`[Req ${reqIndex + 1}] Raw (first 400): ${content.substring(0, 400)}`);
+            return {
+                requirementIndex: reqIndex,
+                requirement,
+                passed: false,
+                details: 'Sub-agent response could not be parsed — treating as FAIL',
+            };
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log(`[Req ${reqIndex + 1}] Sub-agent error: ${msg.substring(0, 200)}`);
+        try { await session.destroy(); } catch { /* ignore */ }
+        return {
+            requirementIndex: reqIndex,
+            requirement,
             passed: false,
-            details: 'QA judge response could not be parsed — treating as FAIL',
-        }));
+            details: `Sub-agent error: ${msg.substring(0, 200)}`,
+        };
     }
+}
+
+/**
+ * Evaluate all requirements in parallel using dedicated sub-agents.
+ * Each requirement gets its own Opus 4.6 session for deep, adversarial analysis.
+ * Bounded concurrency prevents overwhelming the API.
+ */
+async function evaluateRequirementsParallel(
+    client: CopilotClient,
+    audit: Record<string, unknown>,
+    requirements: string[],
+    log: (msg: string) => void,
+    onResult: (result: ValidationResult) => void,
+    onProgress: (current: number, total: number, message: string) => void,
+): Promise<ValidationResult[]> {
+    const MAX_CONCURRENT = 4;
+    const total = requirements.length;
+    const results: ValidationResult[] = new Array(total);
+    let completed = 0;
+
+    log(`Spawning ${total} parallel sub-agents (max ${MAX_CONCURRENT} concurrent) using claude-opus-4.6...`);
+
+    // Bounded concurrency via semaphore pattern
+    const queue = requirements.map((req, i) => ({ req, i }));
+    const workers: Promise<void>[] = [];
+
+    for (let w = 0; w < Math.min(MAX_CONCURRENT, total); w++) {
+        workers.push((async () => {
+            while (queue.length > 0) {
+                const item = queue.shift();
+                if (!item) break;
+                const { req, i } = item;
+
+                log(`[Req ${i + 1}/${total}] Sub-agent starting: "${req.substring(0, 60)}..."`);
+                const result = await evaluateSingleRequirement(client, audit, req, i, log);
+                results[i] = result;
+                completed++;
+
+                onProgress(completed, total, `${result.passed ? '✅' : '❌'} Req ${i + 1}: ${req.substring(0, 50)}...`);
+                onResult(result);
+                log(`${result.passed ? '✅' : '❌'} Req ${i + 1} complete: ${result.passed ? 'PASS' : 'FAIL'} — ${result.details.substring(0, 120)}`);
+            }
+        })());
+    }
+
+    await Promise.all(workers);
+    return results;
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -640,19 +726,13 @@ export async function validateDeployment(options: ValidateOptions): Promise<Vali
         try { await unlink(scriptPath); } catch { /* ignore */ }
     }
 
-    // ── Phase 2: AI strict evaluation ──
-    progress(0, total, 'AI judge evaluating requirements against evidence...');
-    log('Phase 2: Strict AI evaluation of each requirement against collected evidence...');
+    // ── Phase 2: Parallel sub-agent evaluation (one Opus 4.6 agent per requirement) ──
+    progress(0, total, 'Spawning per-requirement sub-agents (Opus 4.6)...');
+    log('Phase 2: Spawning dedicated sub-agent per requirement for adversarial evaluation...');
 
-    const results = await evaluateRequirements(options.client, audit, options.requirements, log);
-
-    // Stream results
-    for (let i = 0; i < results.length; i++) {
-        const result = results[i]!;
-        progress(i + 1, total, `Evaluated: ${result.requirement.substring(0, 50)}...`);
-        onResult(result);
-        log(`${result.passed ? '✅' : '❌'} Req ${i + 1}: ${result.passed ? 'PASS' : 'FAIL'} — ${result.details.substring(0, 120)}`);
-    }
+    const results = await evaluateRequirementsParallel(
+        options.client, audit, options.requirements, log, onResult, progress,
+    );
 
     const passed = results.filter(r => r.passed).length;
     const failed = results.length - passed;
