@@ -1917,6 +1917,8 @@ function buildQAGapTable() {
 
 // ─── Unified Ship & Validate Workflow ─────────────────────────────────────────
 
+let qaWorkflowRunning = false;
+
 async function launchQAWorkflow() {
     const btn = document.getElementById('btnLaunchQA');
     btn.disabled = true;
@@ -1925,6 +1927,7 @@ async function launchQAWorkflow() {
     setStatus('Deployer running...', 'processing');
     setQAStep('deploy');
     validationResults = [];
+    qaWorkflowRunning = true;
 
     const progressEl = document.getElementById('qaWorkflowProgress');
     progressEl.style.display = '';
@@ -1943,10 +1946,7 @@ async function launchQAWorkflow() {
     const siteLink = document.getElementById('qaWorkflowSiteLink');
     if (siteLink) siteLink.style.display = 'none';
     // Reset label & icon in case previous run showed "Not Passed"
-    const resetLabel = wfValidate.querySelector('.qa-wf-step-label');
-    if (resetLabel) resetLabel.textContent = 'Validating';
-    const resetIcon = wfValidate.querySelector('.qa-wf-step-icon--validate');
-    if (resetIcon) resetIcon.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>';
+    resetValidateStepUI(wfValidate);
 
     buildQAGapTable();
     appendLog('qaWorkflowLogEntries', `🤖 Agent: Deployer starting...`);
@@ -1956,18 +1956,7 @@ async function launchQAWorkflow() {
         if (!deployUrl) throw new Error('Deployment did not return a URL');
 
         deployedUrl = deployUrl;
-        const urlBar = document.getElementById('qaDeployUrlBar');
-        urlBar.style.display = 'flex';
-        const urlLink = document.getElementById('qaDeployUrlLink');
-        urlLink.href = deployUrl;
-        urlLink.textContent = deployUrl;
-
-        // Show prominent QA site link in the workflow box
-        const siteLink = document.getElementById('qaWorkflowSiteLink');
-        if (siteLink) {
-            siteLink.href = deployUrl;
-            siteLink.style.display = 'flex';
-        }
+        showDeployUrl(deployUrl);
 
         wfDeploy.classList.remove('active');
         wfDeploy.classList.add('done');
@@ -1981,23 +1970,7 @@ async function launchQAWorkflow() {
         await runValidation(deployUrl);
 
         wfValidate.classList.remove('active');
-
-        const passed = validationResults.filter(v => v.passed).length;
-        const total = validationResults.length;
-        const failed = total - passed;
-        const validateLabel = wfValidate.querySelector('.qa-wf-step-label');
-        const validateIcon = wfValidate.querySelector('.qa-wf-step-icon--validate');
-        if (passed === total && total > 0) {
-            wfValidate.classList.add('done');
-            setStatus(`Validator: All ${total} Passed — Ship it!`, '');
-            appendLog('qaWorkflowLogEntries', `\u2705 Validator complete: ${passed}/${total} passed. All meeting requirements met.`);
-        } else {
-            wfValidate.classList.add('failed');
-            if (validateLabel) validateLabel.textContent = 'Not Passed';
-            if (validateIcon) validateIcon.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>';
-            setStatus(`Validator: ${failed} of ${total} Failed`, 'error');
-            appendLog('qaWorkflowLogEntries', `\u274C Validator report: ${passed} passed, ${failed} failed out of ${total}. Not ready to ship.`);
-        }
+        finishValidationUI(wfValidate);
         setQAStep('complete');
     } catch (error) {
         showToast(error.message);
@@ -2010,6 +1983,7 @@ async function launchQAWorkflow() {
             wfValidate.classList.add('failed');
         }
     } finally {
+        qaWorkflowRunning = false;
         btn.disabled = false;
         btn.innerHTML = `
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2017,6 +1991,159 @@ async function launchQAWorkflow() {
             </svg>
             Re-deploy &amp; Validate
         `;
+    }
+}
+
+// ─── Individual Phase Runners ─────────────────────────────────────────────────
+
+async function runDeployOnly() {
+    if (qaWorkflowRunning) return;
+    const btn = document.getElementById('btnLaunchQA');
+    btn.disabled = true;
+    qaWorkflowRunning = true;
+
+    const progressEl = document.getElementById('qaWorkflowProgress');
+    progressEl.style.display = '';
+    document.getElementById('qaWorkflowLogEntries').innerHTML = '';
+    const logDetails = progressEl.querySelector('.qa-workflow-log-details');
+    if (logDetails) logDetails.open = true;
+
+    const wfDeploy = document.getElementById('qaWfDeploy');
+    const wfValidate = document.getElementById('qaWfValidate');
+    wfDeploy.classList.add('active');
+    wfDeploy.classList.remove('done', 'failed');
+    wfValidate.classList.remove('active', 'done', 'failed');
+    resetValidateStepUI(wfValidate);
+
+    // Hide QA site link from previous run
+    const siteLink = document.getElementById('qaWorkflowSiteLink');
+    if (siteLink) siteLink.style.display = 'none';
+
+    setStatus('Deployer running...', 'processing');
+    setQAStep('deploy');
+    appendLog('qaWorkflowLogEntries', `🤖 Agent: Deployer starting (deploy only)...`);
+
+    try {
+        const deployUrl = await runDeploy();
+        if (!deployUrl) throw new Error('Deployment did not return a URL');
+
+        deployedUrl = deployUrl;
+        showDeployUrl(deployUrl);
+
+        wfDeploy.classList.remove('active');
+        wfDeploy.classList.add('done');
+
+        setStatus('Deployed — ready for validation', '');
+        appendLog('qaWorkflowLogEntries', `✅ Deploy complete: ${deployUrl}`);
+        appendLog('qaWorkflowLogEntries', `💡 Click the Validator icon to validate, or use "Re-deploy & Validate" for both.`);
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Deploy Failed', 'error');
+        wfDeploy.classList.remove('active');
+        wfDeploy.classList.add('failed');
+    } finally {
+        qaWorkflowRunning = false;
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Re-deploy &amp; Validate
+        `;
+    }
+}
+
+async function runValidateOnly() {
+    if (qaWorkflowRunning) return;
+    if (!deployedUrl) {
+        showToast('No deployed URL yet — deploy first or run the full workflow.');
+        return;
+    }
+    const btn = document.getElementById('btnLaunchQA');
+    btn.disabled = true;
+    qaWorkflowRunning = true;
+    validationResults = [];
+
+    const progressEl = document.getElementById('qaWorkflowProgress');
+    progressEl.style.display = '';
+    document.getElementById('qaWorkflowLogEntries').innerHTML = '';
+    const logDetails = progressEl.querySelector('.qa-workflow-log-details');
+    if (logDetails) logDetails.open = true;
+
+    const wfDeploy = document.getElementById('qaWfDeploy');
+    const wfValidate = document.getElementById('qaWfValidate');
+    // Keep deploy as done (we're re-using existing deployment)
+    wfDeploy.classList.remove('active', 'failed');
+    wfDeploy.classList.add('done');
+    wfValidate.classList.add('active');
+    wfValidate.classList.remove('done', 'failed');
+    resetValidateStepUI(wfValidate);
+
+    setStatus('Validator running...', 'processing');
+    setQAStep('validate');
+    buildQAGapTable();
+    appendLog('qaWorkflowLogEntries', `🤖 Agent: Validator starting (validate only) against ${deployedUrl}`);
+
+    try {
+        await runValidation(deployedUrl);
+        wfValidate.classList.remove('active');
+        finishValidationUI(wfValidate);
+        setQAStep('complete');
+    } catch (error) {
+        showToast(error.message);
+        setStatus('Validation Failed', 'error');
+        wfValidate.classList.remove('active');
+        wfValidate.classList.add('failed');
+    } finally {
+        qaWorkflowRunning = false;
+        btn.disabled = false;
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Re-deploy &amp; Validate
+        `;
+    }
+}
+
+// ─── Shared UI Helpers ────────────────────────────────────────────────────────
+
+function showDeployUrl(url) {
+    const urlBar = document.getElementById('qaDeployUrlBar');
+    urlBar.style.display = 'flex';
+    const urlLink = document.getElementById('qaDeployUrlLink');
+    urlLink.href = url;
+    urlLink.textContent = url;
+    const siteLink = document.getElementById('qaWorkflowSiteLink');
+    if (siteLink) {
+        siteLink.href = url;
+        siteLink.style.display = 'flex';
+    }
+}
+
+function resetValidateStepUI(wfValidate) {
+    const label = wfValidate.querySelector('.qa-wf-step-label');
+    if (label) label.textContent = 'Validating';
+    const icon = wfValidate.querySelector('.qa-wf-step-icon--validate');
+    if (icon) icon.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>';
+}
+
+function finishValidationUI(wfValidate) {
+    const passed = validationResults.filter(v => v.passed).length;
+    const total = validationResults.length;
+    const failed = total - passed;
+    const validateLabel = wfValidate.querySelector('.qa-wf-step-label');
+    const validateIcon = wfValidate.querySelector('.qa-wf-step-icon--validate');
+    if (passed === total && total > 0) {
+        wfValidate.classList.add('done');
+        setStatus(`Validator: All ${total} Passed — Ship it!`, '');
+        appendLog('qaWorkflowLogEntries', `\u2705 Validator complete: ${passed}/${total} passed. All meeting requirements met.`);
+    } else {
+        wfValidate.classList.add('failed');
+        if (validateLabel) validateLabel.textContent = 'Not Passed';
+        if (validateIcon) validateIcon.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>';
+        setStatus(`Validator: ${failed} of ${total} Failed`, 'error');
+        appendLog('qaWorkflowLogEntries', `\u274C Validator report: ${passed} passed, ${failed} failed out of ${total}. Not ready to ship.`);
     }
 }
 

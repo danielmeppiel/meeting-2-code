@@ -427,20 +427,22 @@
                                 <a id="qaDeployUrlLink" href="#" target="_blank" class="deploy-url-inline">—</a>
                             </div>
 
-                            <!-- Single workflow button -->
-                            <button class="btn btn-primary btn-lg" id="btnLaunchQA" onclick="launchQAWorkflow()">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
-                                </svg>
-                                Ship &amp; Validate
-                            </button>
+                            <!-- Workflow buttons -->
+                            <div class="qa-btn-group">
+                                <button class="btn btn-primary btn-lg" id="btnLaunchQA" onclick="launchQAWorkflow()">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
+                                    </svg>
+                                    Ship &amp; Validate
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Workflow progress bar (hidden until launched) -->
                     <div class="qa-workflow-progress" id="qaWorkflowProgress" style="display:none;">
                         <div class="qa-workflow-steps">
-                            <div class="qa-wf-step" id="qaWfDeploy">
+                            <div class="qa-wf-step qa-wf-step--clickable" id="qaWfDeploy" onclick="runDeployOnly()" title="Re-deploy to Azure">
                                 <div class="qa-wf-step-icon qa-wf-step-icon--azure">
                                     <img src="https://cdn.worldvectorlogo.com/logos/azure-1.svg" alt="Azure" class="qa-wf-azure-logo">
                                 </div>
@@ -450,7 +452,7 @@
                                 </div>
                             </div>
                             <div class="qa-wf-connector"></div>
-                            <div class="qa-wf-step" id="qaWfValidate">
+                            <div class="qa-wf-step qa-wf-step--clickable" id="qaWfValidate" onclick="runValidateOnly()" title="Re-validate deployed site">
                                 <div class="qa-wf-step-icon qa-wf-step-icon--validate">
                                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="m9 12 2 2 4-4"/></svg>
                                 </div>
@@ -461,10 +463,12 @@
                             </div>
                         </div>
                         <!-- Prominent QA site link (shown after deploy) -->
-                        <a class="qa-site-link" id="qaWorkflowSiteLink" href="#" target="_blank" style="display:none;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                            View QA Website
-                        </a>
+                        <div style="display:flex; justify-content:center;">
+                            <a class="qa-site-link" id="qaWorkflowSiteLink" href="#" target="_blank" style="display:none;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                View QA Website
+                            </a>
+                        </div>
                         <details class="qa-workflow-log-details">
                             <summary>Agent activity</summary>
                             <div class="agent-log agent-log-compact" style="margin-top: var(--space-sm); max-height: 160px;">
