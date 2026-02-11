@@ -2183,6 +2183,29 @@ body {
     border-radius: 12px;
     padding: 1.25rem 1.5rem;
 }
+
+.qa-site-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 1rem auto 0.25rem;
+    padding: 0.6rem 1.4rem;
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.35);
+    border-radius: 8px;
+    color: var(--accent-emerald, #34d399);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s, border-color 0.2s;
+    width: fit-content;
+}
+.qa-site-link:hover {
+    background: rgba(52, 211, 153, 0.18);
+    border-color: rgba(52, 211, 153, 0.55);
+    text-decoration: none;
+}
 .qa-workflow-steps {
     display: flex;
     align-items: center;

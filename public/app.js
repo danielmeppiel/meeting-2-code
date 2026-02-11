@@ -1939,6 +1939,9 @@ async function launchQAWorkflow() {
     wfDeploy.classList.add('active');
     wfDeploy.classList.remove('done', 'failed');
     wfValidate.classList.remove('active', 'done', 'failed');
+    // Hide QA site link from previous run
+    const siteLink = document.getElementById('qaWorkflowSiteLink');
+    if (siteLink) siteLink.style.display = 'none';
     // Reset label & icon in case previous run showed "Not Passed"
     const resetLabel = wfValidate.querySelector('.qa-wf-step-label');
     if (resetLabel) resetLabel.textContent = 'Validating';
@@ -1958,6 +1961,13 @@ async function launchQAWorkflow() {
         const urlLink = document.getElementById('qaDeployUrlLink');
         urlLink.href = deployUrl;
         urlLink.textContent = deployUrl;
+
+        // Show prominent QA site link in the workflow box
+        const siteLink = document.getElementById('qaWorkflowSiteLink');
+        if (siteLink) {
+            siteLink.href = deployUrl;
+            siteLink.style.display = 'flex';
+        }
 
         wfDeploy.classList.remove('active');
         wfDeploy.classList.add('done');
