@@ -2546,46 +2546,48 @@ body {
 .sdlc-contrast {
     display: flex;
     flex-direction: column;
-    gap: var(--space-md);
+    gap: var(--space-lg);
     width: 100%;
-    max-width: 720px;
-    margin: var(--space-md) 0;
+    max-width: 760px;
+    margin: var(--space-xl) 0;
 }
 
 .sdlc-old,
 .sdlc-new {
     display: flex;
     align-items: center;
-    gap: var(--space-md);
-    padding: var(--space-md) var(--space-lg);
+    gap: var(--space-lg);
+    padding: var(--space-lg) var(--space-xl);
     border-radius: var(--radius-lg);
-    font-size: 0.78rem;
+    font-size: 0.85rem;
 }
 
 .sdlc-old {
-    background: rgba(239, 68, 68, 0.04);
-    border: 1px solid rgba(239, 68, 68, 0.12);
-    opacity: 0.6;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.08), inset 0 0 30px rgba(239, 68, 68, 0.04);
 }
 
 .sdlc-new {
-    background: rgba(16, 185, 129, 0.06);
-    border: 1px solid rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.10);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.08), inset 0 0 30px rgba(16, 185, 129, 0.04);
 }
 
 .sdlc-label {
     flex-shrink: 0;
-    font-size: 0.65rem;
-    font-weight: 700;
+    font-size: 0.7rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     color: var(--text-tertiary);
-    min-width: 100px;
+    min-width: 110px;
     text-align: right;
 }
 
 .sdlc-old .sdlc-label {
-    color: rgba(239, 68, 68, 0.6);
+    color: #ef4444;
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.3);
 }
 
 .sdlc-new .sdlc-label {
@@ -2603,8 +2605,8 @@ body {
 }
 
 .sdlc-old .sdlc-steps-mini {
-    text-decoration: line-through;
-    text-decoration-color: rgba(239, 68, 68, 0.3);
+    color: var(--text-primary);
+    opacity: 0.7;
 }
 
 .sdlc-arrow {
@@ -2625,15 +2627,16 @@ body {
 
 .sdlc-time {
     flex-shrink: 0;
-    font-size: 0.72rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    color: var(--text-tertiary);
+    color: rgba(239, 68, 68, 0.7);
     font-family: var(--font-mono);
 }
 
 .sdlc-time--fast {
     color: var(--accent-emerald);
-    text-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+    font-size: 0.85rem;
+    text-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
 }
 
 @media (max-width: 640px) {
