@@ -92,7 +92,9 @@ function appendLog(containerId, message) {
     const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
     entry.innerHTML = `<span class="log-time">${time}</span> ${escapeHtml(message)}`;
     container.appendChild(entry);
-    container.scrollTop = container.scrollHeight;
+    // Scroll the parent .agent-log container (which has overflow-y: auto)
+    const scrollable = container.closest('.agent-log') || container;
+    scrollable.scrollTop = scrollable.scrollHeight;
 }
 
 // ─── Agent Identity ─────────────────────────────────────────────────────────────
@@ -854,8 +856,8 @@ function revealCheckboxesForIssues() {
             const gapId = row.dataset.gapId || '0';
             agentTd.innerHTML = `
                 <select class="agent-type-select" data-gap-id="${gapId}" data-row-index="${row.dataset.index}">
-                    <option value="cloud" selected>☁️ Cloud</option>
-                    <option value="local">💻 Local</option>
+                    <option value="local" selected>💻 Local Agent</option>
+                    <option value="cloud">☁️ Cloud Agent</option>
                     <option value="developer">👤 Developer</option>
                 </select>
             `;
@@ -1039,7 +1041,9 @@ async function dispatchSelected() {
     dispatchInProgress = true;
     dispatchTotalItems = selectedGaps.length;
     dispatchCompletedItems = 0;
-    document.getElementById('dispatchProgressFill').style.width = '0%';
+    const fillEl = document.getElementById('dispatchProgressFill');
+    fillEl.style.width = '0%';
+    fillEl.classList.remove('done');
 
     // Build and show the dispatch table on first dispatch
     showPanel('panel-issues');
@@ -1114,7 +1118,9 @@ async function dispatchSelected() {
         });
 
         // Update dispatch progress to 100% (ensure final state)
-        document.getElementById('dispatchProgressFill').style.width = '100%';
+        const fill1 = document.getElementById('dispatchProgressFill');
+        fill1.style.width = '100%';
+        fill1.classList.add('done');
 
         setStep(4);
         setStatus('Agents Dispatched', '');
@@ -1284,7 +1290,9 @@ function updateDispatchCounts() {
 
     // Progress bar
     const percent = allActionable.length > 0 ? (dispatched / allActionable.length) * 100 : 0;
-    document.getElementById('dispatchProgressFill').style.width = `${percent}%`;
+    const fillUpd = document.getElementById('dispatchProgressFill');
+    fillUpd.style.width = `${percent}%`;
+    if (percent >= 100) fillUpd.classList.add('done');
 }
 
 // ─── Dispatch Remaining (from dispatch panel) ─────────────────────────────────
@@ -1342,6 +1350,7 @@ async function dispatchRemaining() {
             }
         });
 
+        document.getElementById('dispatchProgressFill').classList.add('done');
         setStatus('All Dispatched', '');
         dispatchInProgress = false;
         updateDispatchCounts();

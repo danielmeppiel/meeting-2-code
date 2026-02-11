@@ -96,7 +96,7 @@ export async function extractMeetingRequirements(
     const onMeetingInfo = options.onMeetingInfo ?? (() => {});
     const log = options.onLog ?? (() => {});
 
-    progress(0, "Connecting to M365 MCP Server...");
+    progress(0, "Connecting to M365...");
     log("Initializing WorkIQ MCP session (npx @microsoft/workiq mcp)...");
     console.log("[gap-analyzer] Creating WorkIQ MCP session...");
 

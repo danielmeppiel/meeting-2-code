@@ -1308,6 +1308,11 @@ body {
     animation: shimmer 1.8s ease-in-out infinite;
 }
 
+.creation-progress-fill.done::after {
+    animation: none;
+    display: none;
+}
+
 @keyframes shimmer {
     0% { transform: translateX(-120%); }
     100% { transform: translateX(220%); }
