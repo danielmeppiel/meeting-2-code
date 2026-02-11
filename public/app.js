@@ -15,6 +15,8 @@ let deployedUrl = '';
 let validationResults = [];
 let qaMode = false;
 let previousPanel = 'panel-analyze';
+let activePhase = 'meeting'; // 'meeting' | 'analyze' | 'build' | 'verify'
+let completedPhases = new Set();
 
 // ─── Meeting Input Wiring ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
@@ -42,53 +44,54 @@ function showPanel(panelId) {
         panel.offsetHeight;
         panel.style.animation = '';
     }
-    if (panelId !== 'panel-qa') {
-        previousPanel = panelId;
-    }
+    previousPanel = panelId;
 }
 
 function setStep(step) {
     currentStep = step;
-    // Update all pipeline nodes and connecting lines
-    const nodes = document.querySelectorAll('.pipeline .pipe-node');
-    const lines = document.querySelectorAll('.pipeline .pipe-line');
-    const stepOrder = ['1', '2', '3', 'qa-deploy', 'qa-validate'];
-    const activeIdx = stepOrder.indexOf(String(step));
+    // Map old step numbers to phases
+    const stepToPhase = { 1: 'meeting', 2: 'analyze', 3: 'build' };
+    const phase = stepToPhase[step];
+    if (phase) {
+        setActivePhase(phase);
+    }
+}
 
-    nodes.forEach(n => {
-        const key = n.dataset.step;
-        const idx = stepOrder.indexOf(key);
-        n.classList.remove('active', 'completed');
-        if (idx < activeIdx) n.classList.add('completed');
-        else if (idx === activeIdx) n.classList.add('active');
+function setActivePhase(phase) {
+    activePhase = phase;
+    const phases = ['meeting', 'analyze', 'build', 'verify'];
+    const tabs = document.querySelectorAll('.phase-tab');
+    const connectors = document.querySelectorAll('.phase-connector');
+    const activeIdx = phases.indexOf(phase);
+
+    tabs.forEach(tab => {
+        const p = tab.dataset.phase;
+        const idx = phases.indexOf(p);
+        tab.classList.remove('active', 'completed');
+        if (idx < activeIdx || completedPhases.has(p)) {
+            tab.classList.add('completed');
+        }
+        if (idx === activeIdx) {
+            tab.classList.add('active');
+        }
     });
-    lines.forEach((line, i) => {
-        line.classList.toggle('completed', i < activeIdx);
+    connectors.forEach((conn, i) => {
+        conn.classList.toggle('completed', i < activeIdx);
     });
 }
 
+function markPhaseCompleted(phase) {
+    completedPhases.add(phase);
+    setActivePhase(activePhase); // refresh display
+}
+
+// Legacy QA step indicator — keeps verify phase active during deploy/validate sub-steps
 function setQAStep(phase) {
     // phase: null | 'deploy' | 'validate' | 'complete'
-    const deployNode = document.querySelector('[data-step="qa-deploy"]');
-    const validateNode = document.querySelector('[data-step="qa-validate"]');
-    if (!deployNode || !validateNode) return;
-    deployNode.classList.remove('active', 'completed');
-    validateNode.classList.remove('active', 'completed');
-    // Also update connecting lines
-    const lines = document.querySelectorAll('.pipeline .pipe-line');
-    if (phase === 'deploy') {
-        deployNode.classList.add('active');
-        if (lines[3]) lines[3].classList.add('completed');
-    } else if (phase === 'validate') {
-        deployNode.classList.add('completed');
-        validateNode.classList.add('active');
-        if (lines[3]) lines[3].classList.add('completed');
-        if (lines[4]) lines[4].classList.add('completed');
+    if (phase === 'deploy' || phase === 'validate') {
+        setActivePhase('verify');
     } else if (phase === 'complete') {
-        deployNode.classList.add('completed');
-        validateNode.classList.add('completed');
-        if (lines[3]) lines[3].classList.add('completed');
-        if (lines[4]) lines[4].classList.add('completed');
+        markPhaseCompleted('verify');
     }
 }
 
@@ -1760,6 +1763,8 @@ function resetApp() {
     validationResults = [];
     qaMode = false;
     previousPanel = 'panel-analyze';
+    activePhase = 'meeting';
+    completedPhases = new Set();
     dispatchedGapIds = new Set();
     dispatchInProgress = false;
     dispatchTotalItems = 0;
@@ -1773,17 +1778,6 @@ function resetApp() {
     const colAgentHeader = document.getElementById('colAgentHeader');
     if (colAgentHeader) colAgentHeader.style.display = 'none';
 
-    const fab = document.getElementById('fabQA');
-    if (fab) {
-        fab.classList.remove('active', 'visible');
-        const buildLabel = fab.querySelector('.mode-switch-label--build');
-        const qaLabel = fab.querySelector('.mode-switch-label--qa');
-        if (buildLabel) buildLabel.classList.add('active');
-        if (qaLabel) qaLabel.classList.remove('active');
-    }
-    const buildTrack = null;
-    const qaTrack = null;
-    setQAStep(null);
     const qaUrlBar = document.getElementById('qaDeployUrlBar');
     if (qaUrlBar) qaUrlBar.style.display = 'none';
     const qaProgress = document.getElementById('qaWorkflowProgress');
@@ -1795,26 +1789,17 @@ function resetApp() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function updateQAFabVisibility() {
-    const fab = document.getElementById('fabQA');
-    fab.classList.add('visible');
+    // No-op: toggle removed, phases handle navigation now
 }
 
 function toggleQAMode() {
     qaMode = !qaMode;
-    const sw = document.getElementById('fabQA');
-    const buildLabel = sw.querySelector('.mode-switch-label--build');
-    const qaLabel = sw.querySelector('.mode-switch-label--qa');
-
     if (qaMode) {
-        sw.classList.add('active');
-        buildLabel.classList.remove('active');
-        qaLabel.classList.add('active');
         try { buildQAGapTable(); } catch (e) { console.warn('buildQAGapTable error:', e); }
+        setActivePhase('verify');
         showPanel('panel-qa');
     } else {
-        sw.classList.remove('active');
-        buildLabel.classList.add('active');
-        qaLabel.classList.remove('active');
+        setActivePhase('build');
         showPanel(previousPanel);
     }
 }
@@ -2380,33 +2365,39 @@ function updateQATableRowWithValidation(result) {
     document.getElementById('qaGapSummary').textContent = summaryParts.join(' \u00b7 ');
 }
 
-// ─── Clickable Step Navigation ────────────────────────────────────────────────
-function navigateToStep(stepKey) {
-    // stepKey is: '1' (Analyze), '2' (Review Gaps), '3' (Dispatch/Builder),
-    //             'qa-deploy' or 'qa-validate' (QA track), '4' (Complete)
+// ─── Clickable Phase Navigation ────────────────────────────────────────────────
+function navigateToPhase(phase) {
+    setActivePhase(phase);
 
-    if (stepKey === '1') {
-        // If we've started analysis, show the loading/gap panel; otherwise landing
+    if (phase === 'meeting') {
         if (analysisPhase !== 'idle') {
             showPanel('panel-loading');
         } else {
             showPanel('panel-analyze');
         }
-    } else if (stepKey === '2') {
-        // Gap review table lives in panel-loading
+    } else if (phase === 'analyze') {
         if (analysisPhase !== 'idle') {
             showPanel('panel-loading');
         }
-    } else if (stepKey === '3') {
-        // Dispatch / Issues
+    } else if (phase === 'build') {
         showPanel('panel-issues');
+    } else if (phase === 'verify') {
+        qaMode = true;
+        try { buildQAGapTable(); } catch (e) { console.warn('buildQAGapTable error:', e); }
+        showPanel('panel-qa');
+    }
+}
+
+// Legacy: keep navigateToStep for any internal callers
+function navigateToStep(stepKey) {
+    if (stepKey === '1') {
+        navigateToPhase('meeting');
+    } else if (stepKey === '2') {
+        navigateToPhase('analyze');
+    } else if (stepKey === '3') {
+        navigateToPhase('build');
     } else if (stepKey === 'qa-deploy' || stepKey === 'qa-validate') {
-        // Switch into QA mode and show QA panel
-        if (!qaMode) {
-            toggleQAMode();
-        } else {
-            showPanel('panel-qa');
-        }
+        navigateToPhase('verify');
     } else if (stepKey === '4') {
         showPanel('panel-complete');
     }
@@ -2416,13 +2407,4 @@ function navigateToStep(stepKey) {
 document.addEventListener('DOMContentLoaded', () => {
     setStep(1);
     showPanel('panel-analyze');
-    updateQAFabVisibility();
-
-    // Make all pipeline nodes clickable
-    document.querySelectorAll('.pipeline .pipe-node[data-step]').forEach(stepEl => {
-        stepEl.addEventListener('click', () => {
-            const key = stepEl.dataset.step;
-            navigateToStep(key);
-        });
-    });
 });

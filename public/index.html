@@ -30,47 +30,23 @@
                 </div>
             </div>
             <div class="header-center">
-                <div class="pipeline" id="stepper">
-                    <div class="pipe-node active" data-step="1">
-                        <div class="pipe-avatar pipe-avatar--workiq"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="M365" class="pipe-logo"></div>
-                        <div class="pipe-labels">
-                            <span class="pipe-agent">WorkIQ</span>
-                            <span class="pipe-action">Extract</span>
-                        </div>
-                    </div>
-                    <div class="pipe-line"></div>
-                    <div class="pipe-node" data-step="2">
-                        <div class="pipe-avatar pipe-avatar--analyzer">A</div>
-                        <div class="pipe-labels">
-                            <span class="pipe-agent">Analyzer</span>
-                            <span class="pipe-action">Plan</span>
-                        </div>
-                    </div>
-                    <div class="pipe-line"></div>
-                    <div class="pipe-node" data-step="3">
-                        <div class="pipe-avatar pipe-avatar--builder">B</div>
-                        <div class="pipe-labels">
-                            <span class="pipe-agent">Builder</span>
-                            <span class="pipe-action">Code</span>
-                        </div>
-                    </div>
-                    <div class="pipe-line"></div>
-                    <div class="pipe-node" data-step="qa-deploy">
-                        <div class="pipe-avatar pipe-avatar--deployer"><img src="https://cdn.worldvectorlogo.com/logos/azure-1.svg" alt="Azure" class="pipe-logo"></div>
-                        <div class="pipe-labels">
-                            <span class="pipe-agent">Deployer</span>
-                            <span class="pipe-action">Ship</span>
-                        </div>
-                    </div>
-                    <div class="pipe-line"></div>
-                    <div class="pipe-node" data-step="qa-validate">
-                        <div class="pipe-avatar pipe-avatar--validator">V</div>
-                        <div class="pipe-labels">
-                            <span class="pipe-agent">Validator</span>
-                            <span class="pipe-action">Verify</span>
-                        </div>
-                    </div>
-                </div>
+                <nav class="phase-nav" id="phaseNav">
+                    <button class="phase-tab active" data-phase="meeting" onclick="navigateToPhase('meeting')">
+                        <span class="phase-tab-label">Meet</span>
+                    </button>
+                    <div class="phase-connector"></div>
+                    <button class="phase-tab" data-phase="analyze" onclick="navigateToPhase('analyze')">
+                        <span class="phase-tab-label">Analyze</span>
+                    </button>
+                    <div class="phase-connector"></div>
+                    <button class="phase-tab" data-phase="build" onclick="navigateToPhase('build')">
+                        <span class="phase-tab-label">Build</span>
+                    </button>
+                    <div class="phase-connector"></div>
+                    <button class="phase-tab" data-phase="verify" onclick="navigateToPhase('verify')">
+                        <span class="phase-tab-label">Verify</span>
+                    </button>
+                </nav>
             </div>
             <div class="header-right">
                 <div class="status-badge" id="statusBadge">
@@ -123,15 +99,13 @@
                         <div class="sdlc-new">
                             <span class="sdlc-label">Agentic SDLC</span>
                             <div class="sdlc-steps-mini">
-                                <span class="sdlc-agent-chip">WorkIQ</span>
+                                <span class="sdlc-agent-chip">Meet</span>
                                 <span class="sdlc-arrow">&rarr;</span>
-                                <span class="sdlc-agent-chip">Analyzer</span>
+                                <span class="sdlc-agent-chip">Analyze</span>
                                 <span class="sdlc-arrow">&rarr;</span>
-                                <span class="sdlc-agent-chip">Builder</span>
+                                <span class="sdlc-agent-chip">Build</span>
                                 <span class="sdlc-arrow">&rarr;</span>
-                                <span class="sdlc-agent-chip">Deployer</span>
-                                <span class="sdlc-arrow">&rarr;</span>
-                                <span class="sdlc-agent-chip">Validator</span>
+                                <span class="sdlc-agent-chip">Verify</span>
                             </div>
                             <span class="sdlc-time sdlc-time--fast">Same day</span>
                         </div>
@@ -499,16 +473,7 @@
 
         </main>
 
-        <!-- Mode Toggle Switch -->
-        <div class="mode-switch-container" id="fabQA">
-            <div class="mode-switch">
-                <span class="mode-switch-label mode-switch-label--build active">Build</span>
-                <button class="mode-switch-track" onclick="toggleQAMode()" title="Switch between Build and QA modes">
-                    <span class="mode-switch-thumb"></span>
-                </button>
-                <span class="mode-switch-label mode-switch-label--qa">QA</span>
-            </div>
-        </div>
+
     </div>
 
     <script src="app.js"></script>

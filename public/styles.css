@@ -180,142 +180,93 @@ body {
 
 /* ─── Stepper ──────────────────────────────────────────────────────────────── */
 /* ─── Agent Pipeline ───────────────────────────────────────────────────────── */
-.pipeline {
+/* ─── Phase Navigation ──────────────────────────────────────────────────────── */
+.phase-nav {
     display: flex;
     align-items: center;
     gap: 0;
 }
 
-.pipe-node {
+.phase-tab {
     display: flex;
     align-items: center;
     gap: 6px;
-    opacity: 0.35;
-    transition: opacity var(--duration-normal) var(--ease-out);
+    padding: 6px 16px;
+    border: none;
+    background: transparent;
     cursor: pointer;
-    user-select: none;
-    padding: 4px 2px;
-}
-
-.pipe-node.active {
-    opacity: 1;
-}
-
-.pipe-node.completed {
-    opacity: 0.7;
-}
-
-.pipe-node:hover {
-    opacity: 0.85;
-}
-
-.pipe-avatar {
-    width: 26px;
-    height: 26px;
     border-radius: var(--radius-full);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.65rem;
-    font-weight: 700;
-    color: white;
     transition: all var(--duration-normal) var(--ease-out);
-    flex-shrink: 0;
-    border: 2px solid transparent;
-}
-
-/* Agent colors */
-.pipe-avatar--workiq    { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
-.pipe-avatar--analyzer  { background: #fbbf24; border-color: #fbbf24; }
-.pipe-avatar--builder   { background: #34d399; border-color: #34d399; }
-.pipe-avatar--deployer  { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
-.pipe-avatar--validator { background: #f472b6; border-color: #f472b6; }
-
-/* Inactive state: muted avatars */
-.pipe-node:not(.active):not(.completed) .pipe-avatar {
-    background: var(--bg-tertiary);
-    border-color: var(--border-default);
-    color: var(--text-tertiary);
-}
-
-/* Logo images inside avatars */
-.pipe-logo {
-    width: 16px;
-    height: 16px;
-    object-fit: contain;
-    display: block;
-}
-
-.pipe-node:not(.active):not(.completed) .pipe-logo {
-    opacity: 0.4;
-    filter: grayscale(1);
-}
-
-/* Completed: checkmark glow — but keep logo avatars subtle */
-.pipe-node.completed .pipe-avatar {
-    background: var(--accent-emerald);
-    border-color: var(--accent-emerald);
-}
-.pipe-node.completed .pipe-avatar--workiq,
-.pipe-node.completed .pipe-avatar--deployer {
-    background: rgba(52,211,153,0.15);
-    border-color: var(--accent-emerald);
-}
-
-/* Active: glow ring — keep logo avatars subtle */
-.pipe-node.active .pipe-avatar {
-    box-shadow: 0 0 14px rgba(255, 255, 255, 0.15);
-}
-.pipe-node.active .pipe-avatar--workiq {
-    background: rgba(129,140,248,0.12);
-    border-color: rgba(129,140,248,0.5);
-}
-.pipe-node.active .pipe-avatar--deployer {
-    background: rgba(0,120,212,0.12);
-    border-color: rgba(0,120,212,0.5);
-}
-
-.pipe-labels {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.1;
-}
-
-.pipe-agent {
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-}
-
-.pipe-action {
-    font-size: 0.55rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-tertiary);
-    white-space: nowrap;
-}
-
-.pipe-node.active .pipe-agent {
-    color: var(--text-primary);
-}
-
-.pipe-node:not(.active):not(.completed) .pipe-agent {
-    color: var(--text-tertiary);
-}
-
-.pipe-line {
-    width: 28px;
-    height: 2px;
-    background: var(--border-subtle);
-    margin: 0 2px;
-    flex-shrink: 0;
+    user-select: none;
     position: relative;
 }
 
-/* Completed connector fills in */
-.pipe-line.completed {
+.phase-tab-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    transition: color var(--duration-normal) var(--ease-out);
+}
+
+/* Inactive (not started) — visible but muted */
+.phase-tab {
+    opacity: 0.8;
+}
+
+.phase-tab:hover {
+    opacity: 0.95;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.phase-tab:hover .phase-tab-label {
+    color: var(--text-primary);
+}
+
+/* Active phase */
+.phase-tab.active {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.phase-tab.active .phase-tab-label {
+    color: var(--text-primary);
+}
+
+.phase-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 2px;
+    background: var(--accent-blue);
+    border-radius: 2px;
+}
+
+/* Completed phase */
+.phase-tab.completed {
+    opacity: 0.75;
+}
+
+.phase-tab.completed .phase-tab-label {
+    color: var(--text-secondary);
+}
+
+/* Connector line between phases */
+.phase-connector {
+    width: 24px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.18);
+    flex-shrink: 0;
+    margin: 0 4px;
+    border-radius: 1px;
+    transition: background var(--duration-normal) var(--ease-out);
+}
+
+.phase-connector.completed {
     background: var(--accent-emerald);
 }
 
@@ -2137,66 +2088,7 @@ body {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /* Mode Switch Toggle */
-.mode-switch-container {
-    position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    z-index: 200;
-    display: none;
-    animation: fadeInUp 0.3s ease;
-}
-.mode-switch-container.visible {
-    display: block;
-}
-.mode-switch {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    background: var(--bg-card, #1e1e2e);
-    border: 1px solid var(--border, #333);
-    border-radius: 999px;
-    padding: 0.45rem 1rem;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
-}
-.mode-switch-label {
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted, #666);
-    transition: color 0.2s;
-}
-.mode-switch-label.active {
-    color: var(--text, #fff);
-}
-.mode-switch-track {
-    position: relative;
-    width: 44px;
-    height: 24px;
-    background: var(--bg-hover, #2a2a3a);
-    border: 1px solid var(--border, #333);
-    border-radius: 999px;
-    cursor: pointer;
-    transition: background 0.2s;
-    padding: 0;
-}
-.mode-switch-container.active .mode-switch-track {
-    background: var(--accent-emerald, #34d399);
-    border-color: var(--accent-emerald, #34d399);
-}
-.mode-switch-thumb {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #fff;
-    transition: transform 0.2s;
-}
-.mode-switch-container.active .mode-switch-thumb {
-    transform: translateX(20px);
-}
+
 
 /* QA Unified Panel */
 .qa-unified {
