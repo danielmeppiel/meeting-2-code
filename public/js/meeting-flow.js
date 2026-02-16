@@ -127,6 +127,7 @@ export async function startAnalysis() {
     document.getElementById('colCheckHeader').style.display = 'none';
     document.getElementById('btnAnalyzeGaps').style.display = '';
     document.getElementById('btnCreateIssues').style.display = 'none';
+    document.getElementById('btnDispatchNav').style.display = 'none';
     document.getElementById('btnAnalyzeSkipped').style.display = 'none';
     document.getElementById('epicLink').style.display = 'none';
     store.set('epicIssue', { number: 0, url: '' });

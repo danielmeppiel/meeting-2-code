@@ -1,0 +1,46 @@
+/* ─── Agent Log ────────────────────────────────────────────────────────────── */
+.agent-log {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-sm) var(--space-md);
+    max-height: 160px;
+    overflow-y: auto;
+    margin-top: var(--space-md);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    line-height: 1.7;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+}
+
+.agent-log-compact {
+    max-height: 100px;
+    margin-top: 0;
+    margin-bottom: var(--space-md);
+}
+
+.agent-log-entry {
+    color: var(--text-secondary);
+    padding: 1px 0;
+    animation: logFade 0.3s ease-out;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.agent-log-entry:last-child {
+    color: var(--text-primary);
+}
+
+.log-time {
+    color: var(--text-tertiary);
+    margin-right: var(--space-sm);
+    user-select: none;
+}
+
+@keyframes logFade {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+

@@ -14,7 +14,7 @@
 
 The app walks through a three-step pipeline, fully streamed to the browser in real time:
 
-| Step | What happens | Powered by |
+| Step | What happen | Powered by |
 |------|-------------|------------|
 | **1. Extract** | Retrieves notes/transcript from a Microsoft 365 meeting and extracts actionable requirements | WorkIQ MCP + Copilot SDK |
 | **2. Analyze & Create** | Compares each requirement against the target repo's codebase, identifies gaps, and creates GitHub Issues | GitHub MCP + Copilot SDK + `gh` CLI |
@@ -40,8 +40,15 @@ meeting-2-code/
 │       └── coding-agent.ts       # Phase 4: Copilot agent assignment via GitHub REST API
 ├── public/
 │   ├── index.html                # Single-page app
-│   ├── app.js                    # Frontend logic with SSE consumers
-│   └── styles.css                # Glass morphism dark theme
+│   ├── css/                      # Modular CSS (source of truth)
+│   │   ├── main.css              # Entry point — @imports all partials
+│   │   ├── base/                 # Reset, tokens, ambient bg, responsive
+│   │   ├── layout/               # Shell, header, hero, main content
+│   │   ├── components/           # Buttons, tables, cards, toast, etc.
+│   │   ├── agents/               # Agent identity badges & brand logos
+│   │   └── flows/                # Meeting, QA, loop, slide-over views
+│   ├── js/                       # Frontend logic with SSE consumers
+│   └── styles.css                # ⚠️ Generated — do not edit (see below)
 ├── package.json
 └── tsconfig.json
 ```
@@ -105,6 +112,18 @@ npm run dev
 # Type-check
 npm run build
 ```
+
+### CSS Workflow
+
+Styles live in `public/css/` as modular partials. In development, `index.html` loads `css/main.css` which uses native `@import` — no build step needed.
+
+To regenerate the single-file `public/styles.css` bundle (for production or legacy use):
+
+```bash
+npm run css:build
+```
+
+> **Note:** `public/styles.css` is `.gitignore`d — always edit the partials in `public/css/`, never the generated bundle.
 
 ## License
 

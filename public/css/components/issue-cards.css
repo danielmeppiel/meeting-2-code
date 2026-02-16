@@ -1,0 +1,93 @@
+/* ─── Issues Grid ──────────────────────────────────────────────────────────── */
+.issues-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: var(--space-lg);
+}
+
+.issue-card {
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: var(--space-xl);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    transition: all var(--duration-normal) var(--ease-out);
+    backdrop-filter: blur(10px);
+    animation: fadeSlideIn 0.4s var(--ease-out) both;
+}
+
+.issue-card:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Issue Creation Progress ──────────────────────────────────────────────── */
+.creation-progress-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg);
+    padding: var(--space-2xl);
+    background: var(--bg-glass);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    backdrop-filter: blur(10px);
+    margin-bottom: var(--space-xl);
+}
+
+.creation-progress-text {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.creation-progress-counter {
+    font-size: 1.1rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--accent-blue);
+}
+
+.creation-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-elevated);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.creation-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+    border-radius: 4px;
+    transition: width 0.5s var(--ease-out);
+    position: relative;
+}
+
+.creation-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 60%;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 40%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0.3) 60%, transparent 100%);
+    animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.creation-progress-fill.done::after {
+    animation: none;
+    display: none;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(220%); }
+}
+
+.creation-progress-detail {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: var(--space-xs);
+}
+

@@ -23,11 +23,19 @@ export function getDispatchedGapIds() { return dispatchedGapIds; }
 /** @returns {boolean} Whether a dispatch is currently in progress. */
 export function isDispatchInProgress() { return dispatchInProgress; }
 
-// ─── Build Preview (pre-dispatch table) ─────────────────────────
+/** Reset all build flow state (called on app reset). */
+export function resetBuildFlow() {
+    dispatchedGapIds = new Set();
+    dispatchInProgress = false;
+    dispatchTotalItems = 0;
+    dispatchCompletedItems = 0;
+}
+
+// ─── Build Queue (interactive pre-dispatch table) ───────────────
 /**
- * Populate the dispatch table with analyzed gaps in a "Ready" state,
- * so the Build panel isn't empty before the user dispatches.
- * No-ops if dispatch is already in progress or completed.
+ * Populate the dispatch table with an interactive queue:
+ * checkboxes, agent dropdowns, and a Dispatch button.
+ * This is the BUILD panel's primary view before dispatch starts.
  */
 export function renderBuildPreview() {
     const gaps = getGaps();
@@ -39,21 +47,45 @@ export function renderBuildPreview() {
 
     const tbody = document.getElementById('dispatchTableBody');
     if (!tbody) return;
-    // Don't override if already populated by a real dispatch
+    // Don't override if already populated by queue
     if (tbody.children.length > 0) return;
 
     tbody.innerHTML = '';
 
+    // Show queue mode UI
+    const checkHeader = document.getElementById('buildColCheckHeader');
+    if (checkHeader) checkHeader.style.display = '';
+    const queueActions = document.getElementById('dispatchQueueActions');
+    if (queueActions) queueActions.style.display = 'flex';
+    const postActions = document.getElementById('dispatchActions');
+    if (postActions) postActions.style.display = 'none';
+
+    // Pre-select all actionable gaps
+    allActionable.forEach(g => { g.selected = true; });
+
     allActionable.forEach((gap, i) => {
         const tr = document.createElement('tr');
         tr.id = `dispatch-row-${gap.id}`;
-        tr.className = 'dispatch-row remaining';
+        tr.className = 'dispatch-row remaining selected';
+        tr.dataset.gapId = gap.id;
         tr.style.animationDelay = `${i * 0.04}s`;
 
         tr.innerHTML = `
+            <td class="col-check">
+                <label class="checkbox-wrapper">
+                    <input type="checkbox" data-gap-id="${gap.id}" checked onchange="handleBuildCheckboxChange(${gap.id})">
+                    <span class="checkmark"></span>
+                </label>
+            </td>
             <td class="col-req"><div class="td-requirement">${escapeHtml(gap.requirement)}</div></td>
-            <td class="col-dispatch-mode"><span class="dispatch-mode-badge pending">\u2014</span></td>
-            <td class="col-dispatch-issue" id="dispatch-issue-${gap.id}"><span class="text-muted">\u2014</span></td>
+            <td class="col-dispatch-mode">
+                <select class="agent-type-select" data-gap-id="${gap.id}">
+                    <option value="local" selected>💻 Local Agent</option>
+                    <option value="cloud">☁️ Cloud Agent</option>
+                    <option value="developer">👤 Developer</option>
+                </select>
+            </td>
+            <td class="col-dispatch-issue" id="dispatch-issue-${gap.id}"><span class="text-muted">—</span></td>
             <td class="col-dispatch-status" id="dispatch-status-${gap.id}"><span class="status-chip pending">Ready</span></td>
         `;
         tbody.appendChild(tr);
@@ -72,6 +104,98 @@ export function renderBuildPreview() {
             epicLink.style.display = 'inline-flex';
             document.getElementById('dispatchEpicNumber').textContent = epicIssue.number;
         }
+    }
+
+    // Update select all and count
+    const selectAll = document.getElementById('buildSelectAll');
+    if (selectAll) selectAll.checked = true;
+    updateBuildSelectedCount();
+}
+
+// ─── Build Queue Selection Handlers ─────────────────────────────
+
+/**
+ * Handle a single checkbox change in the build dispatch queue.
+ * @param {number} gapId - Gap ID.
+ */
+export function handleBuildCheckboxChange(gapId) {
+    const gaps = getGaps();
+    const gap = gaps.find(g => g.id === gapId);
+    if (!gap) return;
+
+    const row = document.getElementById(`dispatch-row-${gapId}`);
+    const cb = row ? row.querySelector('input[type="checkbox"]') : null;
+    if (cb) {
+        gap.selected = cb.checked;
+        row.classList.toggle('selected', cb.checked);
+    }
+    updateBuildSelectedCount();
+}
+
+/**
+ * Handle the select-all checkbox in the build dispatch queue.
+ */
+export function handleBuildSelectAll() {
+    const selectAll = document.getElementById('buildSelectAll');
+    const checked = selectAll ? selectAll.checked : false;
+    const gaps = getGaps();
+
+    gaps.forEach(g => { if (g.hasGap) g.selected = checked; });
+
+    document.querySelectorAll('#dispatchTableBody .dispatch-row').forEach(row => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb) {
+            cb.checked = checked;
+            row.classList.toggle('selected', checked);
+        }
+    });
+
+    updateBuildSelectedCount();
+}
+
+/**
+ * Toggle all checkboxes in the build dispatch queue (invert selection).
+ */
+export function toggleBuildSelectAll() {
+    const gaps = getGaps();
+    const actionable = gaps.filter(g => g.hasGap);
+    const anySelected = actionable.some(g => g.selected);
+    const newState = !anySelected;
+
+    actionable.forEach(g => { g.selected = newState; });
+
+    document.querySelectorAll('#dispatchTableBody .dispatch-row').forEach(row => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (cb) {
+            cb.checked = newState;
+            row.classList.toggle('selected', newState);
+        }
+    });
+
+    const selectAll = document.getElementById('buildSelectAll');
+    if (selectAll) selectAll.checked = newState;
+
+    updateBuildSelectedCount();
+}
+
+/**
+ * Update the count of selected gaps and the build dispatch button state.
+ */
+export function updateBuildSelectedCount() {
+    const gaps = getGaps();
+    const actionable = gaps.filter(g => g.hasGap);
+    const count = actionable.filter(g => g.selected).length;
+
+    const el = document.getElementById('buildSelectedCount');
+    if (el) el.textContent = count;
+
+    const btn = document.getElementById('btnDispatch');
+    if (btn) btn.disabled = count === 0;
+
+    const selectAll = document.getElementById('buildSelectAll');
+    if (selectAll) {
+        selectAll.checked = count === actionable.length && actionable.length > 0;
+        selectAll.indeterminate = count > 0 && count < actionable.length;
     }
 }
 
@@ -96,7 +220,7 @@ export async function dispatchSelected() {
         return;
     }
 
-    // Partition by agent type from unified table dropdowns
+    // Partition by agent type from build queue dropdowns
     const cloudGaps = [];
     const localGaps = [];
     const developerGaps = [];
@@ -112,13 +236,19 @@ export async function dispatchSelected() {
         }
     });
 
-    const btn = document.getElementById('btnCreateIssues');
-    btn.disabled = true;
+    // Transition from queue mode to dispatch mode
+    const checkHeader = document.getElementById('buildColCheckHeader');
+    if (checkHeader) checkHeader.style.display = 'none';
+    const queueActions = document.getElementById('dispatchQueueActions');
+    if (queueActions) queueActions.style.display = 'none';
+
+    const btn = document.getElementById('btnDispatch');
+    if (btn) btn.disabled = true;
     const cloudLabel = cloudGaps.length > 0 ? `${cloudGaps.length} cloud` : '';
     const localLabel = localGaps.length > 0 ? `${localGaps.length} local` : '';
     const devLabel = developerGaps.length > 0 ? `${developerGaps.length} developer` : '';
     const dispatchLabel = [cloudLabel, localLabel, devLabel].filter(Boolean).join(' + ');
-    btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Dispatching ${dispatchLabel}...`;
+    if (btn) btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Dispatching ${dispatchLabel}...`;
 
     setStatus('Builder Dispatching...', 'processing');
     setActivePhase('build');
@@ -229,15 +359,21 @@ export async function dispatchSelected() {
         showToast(error.message);
         setStatus('Error', 'error');
         dispatchInProgress = false;
-        btn.disabled = false;
-        btn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>
-                <circle cx="12" cy="15" r="2"/>
-            </svg>
-            Dispatch Selected
-            <span class="btn-badge" id="selectedCount">${selectedGaps.length}</span>
-        `;
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+                Dispatch
+                <span class="btn-badge" id="buildSelectedCount">${selectedGaps.length}</span>
+            `;
+        }
+        // Restore queue mode on error
+        const checkHeader2 = document.getElementById('buildColCheckHeader');
+        if (checkHeader2) checkHeader2.style.display = '';
+        const queueActions2 = document.getElementById('dispatchQueueActions');
+        if (queueActions2) queueActions2.style.display = 'flex';
     }
 }
 

@@ -1,0 +1,142 @@
+/* ─── App Shell ────────────────────────────────────────────────────────────── */
+#app {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ─── Header ───────────────────────────────────────────────────────────────── */
+.app-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-sm) var(--space-2xl);
+    background: rgba(9, 9, 11, 0.8);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 1px solid var(--border-subtle);
+    min-height: 64px;
+}
+
+.header-left, .header-right {
+    flex: 0 0 200px;
+}
+
+.header-right {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--text-primary);
+}
+
+.logo svg {
+    color: var(--accent-blue);
+}
+
+.logo-text {
+    font-weight: 700;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+}
+
+/* ─── Stepper ──────────────────────────────────────────────────────────────── */
+/* ─── Agent Pipeline ───────────────────────────────────────────────────────── */
+/* ─── Phase Navigation ──────────────────────────────────────────────────────── */
+.phase-nav {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.phase-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: var(--radius-full);
+    transition: all var(--duration-normal) var(--ease-out);
+    user-select: none;
+    position: relative;
+}
+
+.phase-tab-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    transition: color var(--duration-normal) var(--ease-out);
+}
+
+/* Inactive (not started) — visible but muted */
+.phase-tab {
+    opacity: 0.8;
+}
+
+.phase-tab:hover {
+    opacity: 0.95;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.phase-tab:hover .phase-tab-label {
+    color: var(--text-primary);
+}
+
+/* Active phase */
+.phase-tab.active {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.phase-tab.active .phase-tab-label {
+    color: var(--text-primary);
+}
+
+.phase-tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 20px;
+    height: 2px;
+    background: var(--accent-blue);
+    border-radius: 2px;
+}
+
+/* Completed phase */
+.phase-tab.completed {
+    opacity: 0.75;
+}
+
+.phase-tab.completed .phase-tab-label {
+    color: var(--text-secondary);
+}
+
+/* Connector line between phases */
+.phase-connector {
+    width: 24px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.18);
+    flex-shrink: 0;
+    margin: 0 4px;
+    border-radius: 1px;
+    transition: background var(--duration-normal) var(--ease-out);
+}
+
+.phase-connector.completed {
+    background: var(--accent-emerald);
+}
+

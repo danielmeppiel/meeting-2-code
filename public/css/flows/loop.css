@@ -1,0 +1,551 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   INFINITE LOOP CONTROL PANE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Loop Container ───────────────────────────────────────────────────────── */
+#panel-loop {
+    padding: 0;
+    max-width: 100%;
+    position: relative;
+}
+
+#panel-loop.active {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: calc(100vh - 64px);
+}
+
+.loop-container {
+    position: relative;
+    width: 100%;
+    max-width: 1000px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    padding: var(--space-xl) var(--space-xl) 0;
+}
+
+.loop-svg {
+    width: 100%;
+    max-width: 900px;
+    height: auto;
+    overflow: visible;
+}
+
+/* ─── Layer 1: Wide ambient glow behind everything ─────────────────────────── */
+.loop-path-ambient {
+    fill: none;
+    stroke: url(#loopGradientAnimated);
+    stroke-width: 40;
+    stroke-opacity: 0.04;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ─── Layer 2: Outer glow (filtered) ───────────────────────────────────────── */
+.loop-path-glow {
+    fill: none;
+    stroke: url(#loopGradientAnimated);
+    stroke-width: 12;
+    stroke-opacity: 0.3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ─── Layer 3: Main thick path ─────────────────────────────────────────────── */
+.loop-path {
+    fill: none;
+    stroke: url(#loopGradient);
+    stroke-width: 6;
+    stroke-opacity: 0.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 6px rgba(139, 92, 246, 0.15)) drop-shadow(0 0 12px rgba(59, 130, 246, 0.1));
+    transition: stroke-opacity 0.6s ease, stroke-width 0.6s ease;
+}
+
+.loop-path.active {
+    stroke-opacity: 0.85;
+    stroke-width: 7;
+}
+
+/* ─── Layer 4: Animated energy flow (flowing dashes) ───────────────────────── */
+.loop-path-energy {
+    fill: none;
+    stroke: url(#loopGradientAnimated);
+    stroke-width: 3;
+    stroke-opacity: 0.8;
+    stroke-linecap: round;
+    stroke-dasharray: 12 40;
+    animation: loopEnergyFlow 4s linear infinite;
+}
+
+@keyframes loopEnergyFlow {
+    0% { stroke-dashoffset: 0; }
+    100% { stroke-dashoffset: -520; }
+}
+
+/* ─── Layer 5: Bright inner highlight ──────────────────────────────────────── */
+.loop-path-highlight {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.12);
+    stroke-width: 1.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ─── Center crossover glow ────────────────────────────────────────────────── */
+.loop-center-glow {
+    fill: rgba(255, 255, 255, 0.06);
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.15));
+    animation: centerPulse 3s ease-in-out infinite;
+}
+
+@keyframes centerPulse {
+    0%, 100% { opacity: 0.4; r: 6; }
+    50% { opacity: 0.8; r: 10; }
+}
+
+/* Loop particle glow */
+.loop-particle {
+    filter: drop-shadow(0 0 6px currentColor) drop-shadow(0 0 12px currentColor);
+    transition: fill 0.3s ease;
+}
+
+/* ─── Loop Responsive ──────────────────────────────────────────────────────── */
+@media (max-width: 1199px) and (min-width: 900px) {
+    .loop-container {
+        max-width: 850px;
+    }
+}
+
+@media (max-width: 899px) {
+    .loop-container {
+        flex-direction: column;
+        padding: var(--space-lg);
+    }
+    .loop-svg {
+        display: none;
+    }
+}
+
+/* ─── Stage Node Cards ─────────────────────────────────────────────────────── */
+.stage-node {
+    position: absolute;
+    width: 160px;
+    min-height: 100px;
+    border-radius: 16px;
+    background: var(--bg-glass);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-md);
+    gap: var(--space-xs);
+    z-index: 10;
+    transition: all var(--duration-normal) var(--ease-out);
+    cursor: default;
+    user-select: none;
+}
+
+.stage-node-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.stage-node-icon {
+    font-size: 0.85rem;
+    opacity: 0.6;
+    transition: opacity var(--duration-normal) var(--ease-out), color var(--duration-normal);
+}
+
+.stage-node-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    transition: color var(--duration-normal);
+}
+
+.stage-node-divider {
+    height: 1px;
+    background: var(--border-subtle);
+    margin: var(--space-xs) 0;
+}
+
+.stage-node-metrics {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.stage-node-metric {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    line-height: 1.3;
+    transition: color var(--duration-normal);
+}
+
+.stage-node-metric[data-metric="primary"] {
+    font-weight: 600;
+    font-size: 0.8rem;
+}
+
+.stage-node-status {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+}
+
+.stage-node-status-text {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    transition: color var(--duration-normal);
+}
+
+/* ─── Stage Node Action Buttons ────────────────────────────────────────── */
+.stage-node-action {
+    display: none;
+    margin-top: var(--space-xs);
+}
+
+.stage-node-action:not(:empty) {
+    display: block;
+}
+
+.stage-node-action-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-sans);
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+    letter-spacing: 0.01em;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.stage-node-action-btn:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.15);
+}
+
+.stage-node-action-btn:active {
+    transform: translateY(0);
+}
+
+/* Per-stage action button colors */
+.stage-node--analyze .stage-node-action-btn {
+    background: var(--stage-analyze);
+    color: #000;
+}
+
+.stage-node--build .stage-node-action-btn {
+    background: var(--stage-build);
+    color: #000;
+}
+
+.stage-node--verify .stage-node-action-btn {
+    background: var(--stage-verify);
+    color: #fff;
+}
+
+/* Pulse animation to draw attention to the action button */
+.stage-node-action-btn.pulse {
+    animation: actionBtnPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes actionBtnPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); transform: scale(1); }
+    50% { box-shadow: 0 0 12px 4px rgba(255,255,255,0.08); transform: scale(1.03); }
+}
+
+/* Position each card at the extremes of the infinity loop lobes */
+.stage-node--meet { left: 8%; top: 18%; transform: translate(-50%, -50%); }
+.stage-node--analyze { left: 8%; top: 82%; transform: translate(-50%, -50%); }
+.stage-node--build { left: 92%; top: 18%; transform: translate(-50%, -50%); }
+.stage-node--verify { left: 92%; top: 82%; transform: translate(-50%, -50%); }
+
+/* ─── Stage Node States ────────────────────────────────────────────────────── */
+
+/* Idle — very dim, not yet reached */
+.stage-node--idle {
+    opacity: 0.22;
+    border-color: rgba(255, 255, 255, 0.04);
+    background: rgba(24, 24, 30, 0.3);
+}
+.stage-node--idle .stage-node-icon { opacity: 0.2; }
+
+/* Waiting — bright, attention-grabbing; this is where the user acts next */
+.stage-node--waiting {
+    opacity: 1;
+    cursor: pointer;
+    background: rgba(24, 24, 30, 0.85);
+}
+.stage-node--waiting .stage-node-icon { opacity: 0.8; }
+.stage-node--waiting .stage-node-name { color: var(--text-primary); }
+.stage-node--waiting .stage-node-metric { color: var(--text-secondary); }
+.stage-node--waiting .stage-node-status-text { color: var(--text-secondary); }
+
+/* Active — full brightness, glowing border, spinner icon */
+.stage-node--active {
+    opacity: 1;
+    cursor: pointer;
+    transform-origin: center;
+}
+.stage-node--active .stage-node-icon {
+    opacity: 1;
+    animation: spin-slow 2s linear infinite;
+}
+.stage-node--active .stage-node-name {
+    color: var(--text-primary);
+}
+.stage-node--active .stage-node-metric {
+    color: var(--text-secondary);
+}
+.stage-node--active .stage-node-status-text {
+    color: var(--text-primary);
+}
+
+/* Active state per-stage color glow */
+.stage-node--meet.stage-node--active {
+    border-color: var(--stage-meet);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.25), 0 0 40px rgba(59, 130, 246, 0.1);
+}
+.stage-node--meet.stage-node--active .stage-node-icon { color: var(--stage-meet); }
+.stage-node--meet.stage-node--waiting {
+    border-color: rgba(59, 130, 246, 0.4);
+    animation: stage-pulse-meet 2s ease-in-out infinite;
+}
+.stage-node--meet.stage-node--waiting .stage-node-icon { color: var(--stage-meet); }
+
+.stage-node--analyze.stage-node--active {
+    border-color: var(--stage-analyze);
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.25), 0 0 40px rgba(245, 158, 11, 0.1);
+}
+.stage-node--analyze.stage-node--active .stage-node-icon { color: var(--stage-analyze); }
+.stage-node--analyze.stage-node--waiting {
+    border-color: rgba(245, 158, 11, 0.4);
+    animation: stage-pulse-analyze 2s ease-in-out infinite;
+}
+.stage-node--analyze.stage-node--waiting .stage-node-icon { color: var(--stage-analyze); }
+
+.stage-node--build.stage-node--active {
+    border-color: var(--stage-build);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.25), 0 0 40px rgba(16, 185, 129, 0.1);
+}
+.stage-node--build.stage-node--active .stage-node-icon { color: var(--stage-build); }
+.stage-node--build.stage-node--waiting {
+    border-color: rgba(16, 185, 129, 0.4);
+    animation: stage-pulse-build 2s ease-in-out infinite;
+}
+.stage-node--build.stage-node--waiting .stage-node-icon { color: var(--stage-build); }
+
+.stage-node--verify.stage-node--active {
+    border-color: var(--stage-verify);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.25), 0 0 40px rgba(139, 92, 246, 0.1);
+}
+.stage-node--verify.stage-node--active .stage-node-icon { color: var(--stage-verify); }
+.stage-node--verify.stage-node--waiting {
+    border-color: rgba(139, 92, 246, 0.4);
+    animation: stage-pulse-verify 2s ease-in-out infinite;
+}
+.stage-node--verify.stage-node--waiting .stage-node-icon { color: var(--stage-verify); }
+
+/* Waiting pulse animations per stage — stronger glow to attract attention */
+@keyframes stage-pulse-meet {
+    0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.25), 0 0 40px rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.55); }
+}
+@keyframes stage-pulse-analyze {
+    0%, 100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.25), 0 0 40px rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.55); }
+}
+@keyframes stage-pulse-build {
+    0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.25), 0 0 40px rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.55); }
+}
+@keyframes stage-pulse-verify {
+    0%, 100% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.25), 0 0 40px rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.55); }
+}
+
+/* Complete — settled, retains stage's own color (dimmed) */
+.stage-node--complete {
+    opacity: 0.55;
+    cursor: pointer;
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(24, 24, 30, 0.5);
+}
+.stage-node--complete .stage-node-icon {
+    opacity: 0.7;
+    color: var(--text-secondary);
+}
+.stage-node--complete .stage-node-name {
+    color: var(--text-tertiary);
+}
+.stage-node--complete .stage-node-metric {
+    color: var(--text-tertiary);
+}
+.stage-node--complete .stage-node-status-text {
+    color: var(--accent-emerald);
+    opacity: 0.8;
+}
+
+/* Per-stage complete: subtle left accent in original color */
+.stage-node--meet.stage-node--complete {
+    border-left: 2px solid rgba(59, 130, 246, 0.4);
+}
+.stage-node--meet.stage-node--complete .stage-node-icon { color: rgba(59, 130, 246, 0.6); }
+
+.stage-node--analyze.stage-node--complete {
+    border-left: 2px solid rgba(245, 158, 11, 0.4);
+}
+.stage-node--analyze.stage-node--complete .stage-node-icon { color: rgba(245, 158, 11, 0.6); }
+
+.stage-node--build.stage-node--complete {
+    border-left: 2px solid rgba(16, 185, 129, 0.4);
+}
+.stage-node--build.stage-node--complete .stage-node-icon { color: rgba(16, 185, 129, 0.6); }
+
+.stage-node--verify.stage-node--complete {
+    border-left: 2px solid rgba(139, 92, 246, 0.4);
+}
+.stage-node--verify.stage-node--complete .stage-node-icon { color: rgba(139, 92, 246, 0.6); }
+
+/* Error — red glow */
+.stage-node--error {
+    opacity: 1;
+    cursor: pointer;
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.2);
+    background: rgba(239, 68, 68, 0.05);
+}
+.stage-node--error .stage-node-icon {
+    opacity: 1;
+    color: var(--accent-red);
+}
+.stage-node--error .stage-node-status-text {
+    color: var(--accent-red);
+}
+
+/* Hover effects (only for clickable states) */
+.stage-node--active:hover,
+.stage-node--waiting:hover,
+.stage-node--complete:hover,
+.stage-node--error:hover {
+    transform: translate(-50%, -50%) scale(1.03);
+}
+
+/* Selected state (when slide-over is open for this stage) */
+.stage-node--selected {
+    transform: translate(-50%, -50%) scale(1.05);
+    z-index: 11;
+}
+
+/* Responsive adjustments for stage nodes */
+@media (max-width: 1199px) and (min-width: 900px) {
+    .stage-node {
+        width: 140px;
+        min-height: 90px;
+        padding: var(--space-sm);
+    }
+    .stage-node-name { font-size: 0.65rem; }
+    .stage-node-metric { font-size: 0.7rem; }
+    .stage-node-metric[data-metric="primary"] { font-size: 0.75rem; }
+}
+
+@media (max-width: 899px) {
+    .stage-node {
+        position: relative;
+        left: auto;
+        top: auto;
+        transform: none;
+        width: 100%;
+        max-width: 320px;
+        margin: var(--space-sm) auto;
+    }
+    .stage-node--active:hover,
+    .stage-node--waiting:hover,
+    .stage-node--complete:hover,
+    .stage-node--error:hover {
+        transform: scale(1.02);
+    }
+    .stage-node--selected {
+        transform: scale(1.03);
+    }
+}
+
+/* ─── Loop Header Info ─────────────────────────────────────────────────────── */
+.loop-header-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    animation: fadeSlideIn 0.3s var(--ease-out);
+}
+
+.loop-meeting-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    transition: all var(--duration-fast) var(--ease-out);
+    text-decoration: none;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.loop-meeting-name:hover {
+    background: rgba(255, 255, 255, 0.06);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.iteration-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: var(--space-xs) var(--space-md);
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: var(--radius-full);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent-violet);
+    letter-spacing: 0.02em;
+    transition: background var(--duration-fast) var(--ease-out);
+}
+
+.iteration-badge:hover {
+    background: rgba(139, 92, 246, 0.18);
+}
+
+.btn-sm {
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.78rem;
+    border-radius: var(--radius-sm);
+}
+
+/* Transition effect for header content swap */
+.phase-nav, .loop-header-info {
+    transition: opacity 0.2s var(--ease-out);
+}
+

@@ -4,3 +4,6 @@ dist/
 *.log
 tests/screenshots
 WIP
+
+# Generated CSS bundle (source of truth is public/css/**)
+public/styles.css

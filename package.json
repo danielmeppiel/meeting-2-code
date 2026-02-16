@@ -7,6 +7,7 @@
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
+    "css:build": "cat public/css/base/reset.css public/css/base/ambient.css public/css/layout/shell.css public/css/components/status-badge.css public/css/layout/main-content.css public/css/layout/hero.css public/css/components/buttons.css public/css/components/meeting-input.css public/css/components/loading.css public/css/flows/meeting-flow.css public/css/components/panel-header.css public/css/components/gap-table.css public/css/components/complexity-badge.css public/css/components/issue-cards.css public/css/components/issue-table.css public/css/components/dispatch.css public/css/components/meeting-card.css public/css/components/agent-log.css public/css/components/completion.css public/css/components/toast.css public/css/base/responsive.css public/css/flows/qa-mode.css public/css/agents/identity.css public/css/agents/sdlc-contrast.css public/css/agents/brands.css public/css/flows/loop.css public/css/flows/slide-over.css public/css/components/req-cards.css public/css/flows/loop-responsive.css > public/styles.css",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],

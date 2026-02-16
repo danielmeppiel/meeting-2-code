@@ -1,0 +1,323 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   PARTICLE SYSTEM (TASK 8 + TASK 9)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.loop-particle {
+    filter: drop-shadow(0 0 var(--loop-particle-glow) currentColor);
+    transition: fill 0.3s ease;
+    pointer-events: none;
+}
+
+.loop-particle--burst {
+    filter: drop-shadow(0 0 10px currentColor) drop-shadow(0 0 20px currentColor);
+}
+
+.loop-particle--celebration {
+    filter: drop-shadow(0 0 12px #fff) drop-shadow(0 0 24px currentColor);
+}
+
+.loop-crossover-burst {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--loop-crossover-burst), transparent);
+    transform: translate(-50%, -50%) scale(0);
+    animation: crossover-burst 300ms ease-out forwards;
+    pointer-events: none;
+    z-index: 10;
+}
+
+@keyframes crossover-burst {
+    0% { transform: translate(-50%, -50%) scale(0); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTIVITY FEED (TASK 10)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.activity-feed {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(15, 15, 20, 0.9);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-subtle);
+    max-height: 40px;
+    overflow: hidden;
+    transition: max-height 300ms cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    z-index: 50;
+}
+
+.activity-feed.expanded {
+    max-height: 200px;
+}
+
+.activity-feed-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.activity-feed-toggle {
+    font-size: 0.65rem;
+    transition: transform 300ms ease;
+}
+
+.activity-feed.expanded .activity-feed-toggle {
+    transform: rotate(180deg);
+}
+
+.activity-feed-entries {
+    padding: 0 16px 8px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.activity-feed-entry {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    padding: 2px 0;
+    line-height: 1.4;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.activity-feed-entry .log-time {
+    color: var(--text-quaternary, rgba(255,255,255,0.3));
+    margin-right: 6px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.7rem;
+}
+
+.activity-feed-entry .activity-agent {
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.activity-agent.workiq { color: #818cf8; }
+.activity-agent.analyzer { color: #fbbf24; }
+.activity-agent.builder { color: #34d399; }
+.activity-agent.deployer { color: #0078D4; }
+.activity-agent.validator { color: #f472b6; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE + POLISH (TASK 11)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Micro-animations ──────────────────────────────────────────────────── */
+
+/* Landing → Loop transition */
+#panel-analyze {
+    transition: opacity 300ms ease, transform 300ms ease;
+}
+
+#panel-loop {
+    transition: opacity 400ms ease, transform 400ms ease;
+}
+
+#panel-loop.active {
+    animation: loopFadeIn 400ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes loopFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Stage card state transitions */
+.stage-node {
+    transition: opacity 0.3s ease,
+                transform 0.2s ease,
+                border-color 0.3s ease,
+                box-shadow 0.3s ease,
+                background 0.3s ease;
+}
+
+/* Stage complete: spinner → checkmark scale-in */
+.stage-node--complete .stage-node-icon {
+    animation: checkmarkScaleIn 200ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes checkmarkScaleIn {
+    from {
+        transform: scale(0);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* Meeting name hover */
+.loop-meeting-name:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* Iteration badge hover */
+.iteration-badge:hover {
+    background: rgba(139, 92, 246, 0.2);
+}
+
+/* ── Responsive: Medium screens (900–1199px) ───────────────────────────── */
+
+@media (max-width: 1199px) {
+    .loop-container {
+        min-height: 350px;
+    }
+
+    .loop-svg {
+        max-height: 350px;
+    }
+
+    /* Tighten stage node positions */
+    .stage-node--meet    { left: 12%; top: 5%; }
+    .stage-node--analyze { left: 12%; top: 88%; }
+    .stage-node--build   { left: 88%; top: 5%; }
+    .stage-node--verify  { left: 88%; top: 88%; }
+}
+
+/* ── Responsive: Small screens (<900px) — Vertical linear layout ───────── */
+
+@media (max-width: 899px) {
+    #panel-loop {
+        overflow-y: auto;
+    }
+
+    .loop-container {
+        flex-direction: column;
+        align-items: center;
+        min-height: auto;
+        padding: var(--space-lg) var(--space-md);
+        gap: var(--space-md);
+        position: relative;
+    }
+
+    /* Hide SVG loop on small screens — show vertical layout instead */
+    .loop-svg {
+        display: none;
+    }
+
+    /* Vertical connecting line */
+    .loop-container::before {
+        content: '';
+        position: absolute;
+        top: 40px;
+        bottom: 40px;
+        left: 50%;
+        width: 2px;
+        background: linear-gradient(
+            to bottom,
+            var(--stage-meet),
+            var(--stage-analyze),
+            var(--stage-build),
+            var(--stage-verify)
+        );
+        opacity: 0.15;
+        transform: translateX(-50%);
+        z-index: 0;
+    }
+
+    /* Stack stage nodes vertically */
+    .stage-node {
+        position: relative !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
+        width: 100%;
+        max-width: 320px;
+        z-index: 1;
+    }
+
+    /* Re-order nodes in correct flow */
+    .stage-node--meet    { order: 1; }
+    .stage-node--analyze { order: 2; }
+    .stage-node--build   { order: 3; }
+    .stage-node--verify  { order: 4; }
+
+    /* Smaller header on mobile */
+    .loop-header-info {
+        flex-direction: column;
+        gap: 4px;
+        align-items: flex-start;
+    }
+
+    .loop-meeting-name {
+        font-size: 0.85rem;
+        max-width: 200px;
+    }
+
+    /* Activity feed: full width on mobile */
+    .activity-feed {
+        position: relative;
+        order: 5;
+        margin-top: var(--space-md);
+    }
+}
+
+/* ── Responsive: Extra small (<600px) ──────────────────────────────────── */
+
+@media (max-width: 599px) {
+    .stage-node {
+        max-width: 280px;
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .stage-node-name {
+        font-size: 0.65rem;
+    }
+
+    .stage-node-metric {
+        font-size: 0.7rem;
+    }
+
+    .slide-over-header {
+        padding: var(--space-sm) var(--space-md);
+    }
+
+    .slide-over-content {
+        padding: var(--space-md);
+    }
+}
+
+/* ── Focus management ──────────────────────────────────────────────────── */
+
+.slide-over:focus-within .slide-over-header .btn {
+    outline-offset: 2px;
+}
+
+.stage-node:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+/* ── Print styles — hide loop visuals ──────────────────────────────────── */
+@media print {
+    .loop-svg,
+    .loop-particle,
+    .activity-feed,
+    .slide-over-backdrop,
+    .loop-crossover-burst {
+        display: none !important;
+    }
+}

@@ -1,0 +1,104 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Meeting → Ship | Design System
+   World-class dark UI with glass morphism and ambient gradients
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Reset & Variables ────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    /* Colors */
+    --bg-primary: #09090b;
+    --bg-secondary: #0f0f13;
+    --bg-tertiary: #18181b;
+    --bg-elevated: #1c1c22;
+    --bg-glass: rgba(24, 24, 30, 0.7);
+    --bg-glass-hover: rgba(30, 30, 40, 0.8);
+
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-default: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.15);
+
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
+    --text-inverse: #09090b;
+
+    --accent-blue: #3b82f6;
+    --accent-blue-hover: #2563eb;
+    --accent-blue-glow: rgba(59, 130, 246, 0.2);
+    --accent-violet: #8b5cf6;
+    --accent-violet-glow: rgba(139, 92, 246, 0.15);
+    --accent-emerald: #10b981;
+    --accent-emerald-glow: rgba(16, 185, 129, 0.15);
+    --accent-amber: #f59e0b;
+    --accent-red: #ef4444;
+
+    /* Complexity colors */
+    --complexity-low: #10b981;
+    --complexity-medium: #f59e0b;
+    --complexity-high: #f97316;
+    --complexity-critical: #ef4444;
+
+    /* Spacing */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 12px;
+    --space-lg: 16px;
+    --space-xl: 24px;
+    --space-2xl: 32px;
+    --space-3xl: 48px;
+    --space-4xl: 64px;
+
+    /* Typography */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+
+    /* Transitions */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --duration-fast: 150ms;
+    --duration-normal: 250ms;
+    --duration-slow: 400ms;
+
+    /* Stage colors */
+    --stage-meet: #3b82f6;
+    --stage-analyze: #f59e0b;
+    --stage-build: #10b981;
+    --stage-verify: #8b5cf6;
+
+    /* Loop-specific */
+    --loop-path-stroke: rgba(255, 255, 255, 0.08);
+    --loop-path-stroke-active: rgba(255, 255, 255, 0.25);
+    --loop-particle-glow: 6px;
+    --loop-crossover-burst: rgba(255, 255, 255, 0.4);
+
+    /* Slide-over */
+    --slideover-backdrop: rgba(9, 9, 11, 0.6);
+    --slideover-width: 70%;
+    --slideover-width-md: 85%;
+    --slideover-width-sm: 100%;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-sans);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    line-height: 1.6;
+}
+

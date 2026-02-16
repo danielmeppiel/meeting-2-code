@@ -1,0 +1,255 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   QA MODE — Ship & Validate
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Mode Switch Toggle */
+
+
+/* QA Unified Panel */
+.qa-unified {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-lg, 1.5rem);
+}
+.qa-unified-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.qa-unified-header-left {
+    flex: 1;
+    min-width: 0;
+}
+.qa-unified-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+.qa-deploy-url-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(52, 211, 153, 0.08);
+    border: 1px solid rgba(52, 211, 153, 0.25);
+    border-radius: 8px;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.82rem;
+}
+.deploy-url-inline {
+    color: var(--accent-emerald, #34d399);
+    text-decoration: none;
+    font-weight: 500;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+}
+.deploy-url-inline:hover {
+    text-decoration: underline;
+}
+.qa-table-container-full {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* QA Workflow Progress */
+.qa-workflow-progress {
+    background: var(--bg-card, #1e1e2e);
+    border: 1px solid var(--border, #333);
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+}
+
+.qa-site-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin: 1.25rem auto 0.5rem;
+    padding: 0.7rem 1.8rem;
+    background: rgba(52, 211, 153, 0.08);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    border-radius: 10px;
+    color: var(--accent-emerald, #34d399);
+    font-size: 0.92rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    width: auto;
+    letter-spacing: 0.01em;
+}
+.qa-site-link svg {
+    flex-shrink: 0;
+}
+.qa-site-link:hover {
+    background: rgba(52, 211, 153, 0.16);
+    border-color: rgba(52, 211, 153, 0.55);
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(52, 211, 153, 0.12);
+}
+.qa-workflow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 0.5rem;
+}
+.qa-wf-step {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-muted, #666);
+    transition: color 0.3s;
+}
+.qa-wf-step--clickable {
+    cursor: pointer;
+    border-radius: 12px;
+    padding: 0.375rem 0.625rem;
+    margin: -0.375rem -0.625rem;
+    transition: background 0.2s, color 0.3s, box-shadow 0.2s;
+}
+.qa-wf-step--clickable:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.qa-wf-step--clickable:hover .qa-wf-step-icon {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12);
+    transform: scale(1.05);
+    transition: box-shadow 0.2s, transform 0.15s, background 0.3s;
+}
+.qa-wf-step--clickable:active .qa-wf-step-icon {
+    transform: scale(0.97);
+}
+.qa-wf-step--clickable.done:hover .qa-wf-step-icon {
+    box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.3);
+}
+.qa-wf-step--clickable.failed:hover .qa-wf-step-icon {
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.3);
+}
+/* Hide click affordance while running */
+.qa-wf-step--clickable.active {
+    cursor: default;
+    pointer-events: none;
+}
+.qa-wf-step.active {
+    color: var(--accent-blue, #60a5fa);
+}
+.qa-wf-step.done {
+    color: var(--accent-emerald, #34d399);
+}
+.qa-wf-step.failed {
+    color: var(--accent-red, #f87171);
+}
+.qa-wf-step-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--bg-hover, #2a2a3a);
+    transition: background 0.3s;
+    flex-shrink: 0;
+}
+.qa-wf-step.active .qa-wf-step-icon {
+    background: rgba(96, 165, 250, 0.15);
+    animation: qa-wf-pulse 1.8s ease-in-out infinite;
+    position: relative;
+}
+.qa-wf-step.active .qa-wf-step-icon::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--accent-blue, #60a5fa);
+    animation: spin 0.9s linear infinite;
+}
+.qa-wf-step.active span {
+    animation: qa-wf-text-pulse 2s ease-in-out infinite;
+}
+
+@keyframes qa-wf-pulse {
+    0%, 100% { background: rgba(96, 165, 250, 0.15); }
+    50%      { background: rgba(96, 165, 250, 0.30); }
+}
+@keyframes qa-wf-text-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.6; }
+}
+
+.qa-wf-step.done .qa-wf-step-icon {
+    background: rgba(52, 211, 153, 0.15);
+}
+.qa-wf-step.failed .qa-wf-step-icon {
+    background: rgba(248, 113, 113, 0.15);
+}
+.qa-wf-step.failed .qa-wf-step-icon svg {
+    stroke: var(--accent-red, #f87171);
+}
+.qa-wf-step.failed .qa-wf-step-label {
+    color: var(--accent-red, #f87171);
+}
+.qa-wf-connector {
+    flex: 0 0 80px;
+    height: 2px;
+    background: var(--border, #333);
+    margin: 0 1rem;
+    position: relative;
+    overflow: hidden;
+}
+.qa-wf-step.active ~ .qa-wf-connector,
+.qa-wf-step.active + .qa-wf-connector {
+    background: var(--border, #333);
+}
+.qa-wf-step.done + .qa-wf-connector {
+    background: var(--accent-emerald, #34d399);
+}
+.qa-wf-step.active + .qa-wf-connector::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, var(--accent-blue, #60a5fa), transparent);
+    animation: qa-wf-flow 1.5s ease-in-out infinite;
+}
+@keyframes qa-wf-flow {
+    0%   { left: -100%; }
+    100% { left: 100%; }
+}
+.qa-workflow-log-details summary {
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--text-muted, #666);
+    user-select: none;
+}
+.agent-log-compact {
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+/* Validation row highlights */
+.validation-pass-row {
+    background: rgba(52, 211, 153, 0.04);
+}
+.validation-fail-row {
+    background: rgba(248, 113, 113, 0.04);
+}
+.status-chip.gap-found {
+    background: rgba(248, 113, 113, 0.12);
+    color: #f87171;
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+

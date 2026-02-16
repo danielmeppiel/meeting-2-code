@@ -1,0 +1,254 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   REQUIREMENT CARDS — spacious, non-technical-friendly design
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.req-card-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-sm) 0;
+}
+
+/* ─── Individual Card ──────────────────────────────────────────────────── */
+.req-card {
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-subtle);
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    transition: all var(--duration-normal) var(--ease-out);
+    overflow: hidden;
+    animation: cardSlideIn 0.35s var(--ease-out) both;
+}
+
+@keyframes cardSlideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.req-card:hover {
+    border-color: var(--border-default);
+    background: var(--bg-glass-hover);
+}
+
+/* ─── Card Main Row ────────────────────────────────────────────────────── */
+.req-card-main {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    padding: var(--space-lg) var(--space-xl);
+    cursor: pointer;
+    position: relative;
+    min-height: 56px;
+}
+
+/* ─── Checkbox ─────────────────────────────────────────────────────────── */
+.req-card-checkbox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    margin-top: 2px;
+    cursor: pointer;
+}
+
+.req-card-checkbox input[type="checkbox"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.req-card-check-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 2px solid var(--border-strong);
+    background: transparent;
+    color: transparent;
+    transition: all var(--duration-fast) var(--ease-out);
+}
+
+.req-card-checkbox input:checked + .req-card-check-icon {
+    background: var(--accent-blue);
+    border-color: var(--accent-blue);
+    color: #fff;
+}
+
+.req-card-checkbox input:disabled + .req-card-check-icon {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* ─── Card Content ─────────────────────────────────────────────────────── */
+.req-card-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.req-card-text {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.5;
+    margin-bottom: var(--space-sm);
+}
+
+.req-card-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+}
+
+/* ─── Expand Chevron ───────────────────────────────────────────────────── */
+.req-card-expand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all var(--duration-fast) var(--ease-out);
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.req-card-expand:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+}
+
+.req-card--expanded .req-card-expand svg {
+    transform: rotate(180deg);
+}
+
+/* ─── Agent Row (shown in dispatch phase) ──────────────────────────────── */
+.req-card-agent-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-xl);
+    padding-left: calc(var(--space-xl) + 26px + var(--space-md));
+    border-top: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.req-card-agent-label {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    font-weight: 500;
+}
+
+/* ─── Details Section (expandable) ─────────────────────────────────────── */
+.req-card-details {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s var(--ease-out), padding 0.35s var(--ease-out);
+    padding: 0 var(--space-xl);
+    border-top: 0px solid transparent;
+}
+
+.req-card--expanded .req-card-details {
+    max-height: 400px;
+    padding: var(--space-lg) var(--space-xl);
+    padding-left: calc(var(--space-xl) + 26px + var(--space-md));
+    border-top: 1px solid var(--border-subtle);
+}
+
+.req-card-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--space-md);
+}
+
+.req-card-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.req-card-detail-full {
+    grid-column: 1 / -1;
+}
+
+.req-card-detail-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.req-card-detail-value {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* ─── Card State Variants ──────────────────────────────────────────────── */
+
+/* Selected — left border accent */
+.req-card--selected {
+    border-left: 3px solid var(--accent-blue);
+}
+
+/* Queued for analysis */
+.req-card--queued {
+    border-left: 3px solid var(--stage-analyze);
+}
+
+/* Analyzing — glowing left border + pulse */
+.req-card--analyzing {
+    border-left: 3px solid var(--stage-analyze);
+    animation: cardAnalyzing 1.5s ease-in-out infinite;
+}
+
+@keyframes cardAnalyzing {
+    0%, 100% { box-shadow: inset 3px 0 0 0 var(--stage-analyze), 0 0 0 0 rgba(245, 158, 11, 0); }
+    50% { box-shadow: inset 3px 0 0 0 var(--stage-analyze), 0 0 12px 0 rgba(245, 158, 11, 0.1); }
+}
+
+/* No Gap — dimmed, green accent */
+.req-card--no-gap {
+    border-left: 3px solid var(--accent-emerald);
+    opacity: 0.55;
+}
+
+.req-card--no-gap:hover {
+    opacity: 0.75;
+}
+
+.req-card--no-gap .req-card-text {
+    color: var(--text-secondary);
+}
+
+/* Gap Found — amber/red accent */
+.req-card--gap-found {
+    border-left: 3px solid var(--accent-amber);
+}
+
+/* Skipped */
+.req-card--skipped {
+    opacity: 0.35;
+    border-left: 3px solid var(--border-subtle);
+}
+
+/* Enriched flash */
+.req-card--enriched {
+    animation: cardEnrichFlash 1.2s var(--ease-out);
+}
+
+@keyframes cardEnrichFlash {
+    0% { background: rgba(59, 130, 246, 0.08); }
+    100% { background: var(--bg-glass); }
+}
+

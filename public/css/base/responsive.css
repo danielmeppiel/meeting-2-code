@@ -1,0 +1,55 @@
+/* ─── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .app-header {
+        padding: var(--space-md);
+        flex-wrap: wrap;
+        height: auto;
+        gap: var(--space-md);
+    }
+
+    .header-left, .header-right {
+        flex: 0 0 auto;
+    }
+
+    .header-center {
+        order: 3;
+        flex: 1 0 100%;
+        display: flex;
+        justify-content: center;
+    }
+
+    .stepper {
+        overflow-x: auto;
+        padding-bottom: var(--space-sm);
+    }
+
+    .step-label {
+        display: none;
+    }
+
+    .panel {
+        padding: var(--space-xl) var(--space-lg);
+    }
+
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .panel-header {
+        flex-direction: column;
+    }
+
+    .panel-actions {
+        flex-wrap: wrap;
+    }
+
+    .issues-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .complete-stats {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}
+

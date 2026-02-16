@@ -1,0 +1,186 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Brand Logos — Office, Azure, Copilot, GitHub
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Microsoft 365 Meeting Source Brand ───────────────────────────────────── */
+.meeting-source-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+    margin-bottom: var(--space-md);
+    background: linear-gradient(135deg, rgba(217, 56, 27, 0.08), rgba(255, 185, 0, 0.08));
+    border: 1px solid rgba(217, 56, 27, 0.2);
+    border-radius: var(--radius-md);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #ff9f43;
+    animation: fadeSlideIn 0.4s var(--ease-out);
+    cursor: pointer;
+    overflow: hidden;
+    transition: border-color 0.2s;
+}
+.meeting-source-brand:hover {
+    border-color: rgba(217, 56, 27, 0.35);
+}
+.meeting-source-brand-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 8px 16px;
+}
+.meeting-brand-chevron {
+    margin-left: auto;
+    transition: transform var(--duration-fast) var(--ease-out);
+    opacity: 0.6;
+}
+.meeting-source-brand.expanded .meeting-brand-chevron {
+    transform: rotate(180deg);
+}
+.meeting-source-brand-details {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    padding: 0 16px 12px;
+    font-weight: 400;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    border-top: 1px solid rgba(217, 56, 27, 0.1);
+    padding-top: 10px;
+    animation: fadeSlideIn 0.25s var(--ease-out);
+}
+.meeting-source-brand.expanded .meeting-source-brand-details {
+    display: flex;
+}
+.meeting-detail-row:empty {
+    display: none;
+}
+.meeting-detail-row strong {
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-right: 6px;
+}
+.meeting-source-brand img {
+    flex-shrink: 0;
+    filter: drop-shadow(0 0 4px rgba(217, 56, 27, 0.3));
+}
+
+/* Office logo glow in meeting card */
+.meeting-card-icon .office-logo-img {
+    filter: drop-shadow(0 0 8px rgba(217, 56, 27, 0.3));
+    animation: office-logo-glow 2s ease-in-out infinite;
+}
+@keyframes office-logo-glow {
+    0%, 100% { filter: drop-shadow(0 0 8px rgba(217, 56, 27, 0.2)); }
+    50%      { filter: drop-shadow(0 0 16px rgba(217, 56, 27, 0.45)); }
+}
+
+.meeting-card-icon.found .office-logo-img {
+    animation: office-logo-found 0.5s var(--ease-spring);
+}
+@keyframes office-logo-found {
+    0% { transform: scale(0.8); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+/* ─── Azure Deploy Animation (QA track) ───────────────────────────────────── */
+.qa-wf-step-icon--azure {
+    position: relative;
+    overflow: visible;
+}
+
+/* Azure logo image inside the icon circle */
+.qa-wf-azure-logo {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 6px rgba(0, 120, 212, 0.3));
+    transition: filter 0.3s;
+}
+.qa-wf-step.active .qa-wf-azure-logo {
+    filter: drop-shadow(0 0 10px rgba(0, 120, 212, 0.5));
+    animation: azure-logo-pulse 2s ease-in-out infinite;
+}
+.qa-wf-step.done .qa-wf-azure-logo {
+    filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.4));
+}
+@keyframes azure-logo-pulse {
+    0%, 100% { filter: drop-shadow(0 0 6px rgba(0, 120, 212, 0.3)); transform: scale(1); }
+    50%      { filter: drop-shadow(0 0 14px rgba(0, 120, 212, 0.6)); transform: scale(1.08); }
+}
+
+.qa-wf-step.active .qa-wf-step-icon--azure {
+    background: rgba(0, 120, 212, 0.12) !important;
+}
+.qa-wf-step.active .qa-wf-step-icon--azure::after {
+    border-top-color: #0078D4 !important;
+}
+
+/* Floating code-to-cloud particles */
+.qa-wf-step.active .qa-wf-step-icon--azure::before {
+    content: '{ }';
+    position: absolute;
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 700;
+    color: #0078D4;
+    left: -20px;
+    bottom: -2px;
+    opacity: 0;
+    animation: code-to-azure 2s ease-in-out infinite;
+}
+
+@keyframes code-to-azure {
+    0%   { opacity: 0; transform: translate(0, 0) scale(0.8); }
+    20%  { opacity: 1; transform: translate(6px, -6px) scale(1); }
+    70%  { opacity: 0.8; transform: translate(18px, -14px) scale(0.9); }
+    100% { opacity: 0; transform: translate(24px, -8px) scale(0.5); }
+}
+
+.qa-wf-step.done .qa-wf-step-icon--azure {
+    background: rgba(0, 120, 212, 0.18) !important;
+}
+
+/* Step text layout */
+.qa-wf-step-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.qa-wf-step-label {
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+}
+.qa-wf-step-text .qa-wf-agent-tag {
+    font-size: 0.72rem;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+/* Validate icon sizing */
+.qa-wf-step-icon--validate svg {
+    width: 22px;
+    height: 22px;
+}
+
+/* ─── Copilot Dispatch Badge ──────────────────────────────────────────────── */
+.dispatch-mode-badge.cloud {
+    background: rgba(110, 64, 201, 0.12) !important;
+    color: rgb(175, 140, 255) !important;
+    border: 1px solid rgba(110, 64, 201, 0.3) !important;
+}
+.dispatch-mode-badge.cloud .copilot-dispatch-icon {
+    opacity: 0.9;
+}
+
+/* ─── GitHub Octocat on Epic Links ─────────────────────────────────────────── */
+.epic-link svg {
+    opacity: 0.85 !important;
+    flex-shrink: 0;
+}
+.epic-link:hover svg {
+    opacity: 1 !important;
+}
+

@@ -1,0 +1,27 @@
+/* ─── Main Content ─────────────────────────────────────────────────────────── */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.panel {
+    display: none;
+    flex: 1;
+    padding: 36px var(--space-2xl);
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    animation: fadeSlideIn 0.5s var(--ease-out) both;
+}
+
+.panel.active {
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+

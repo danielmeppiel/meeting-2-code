@@ -362,44 +362,39 @@ export function enrichRowWithGap(gap) {
     setTimeout(() => targetRow.classList.remove('row-flash'), 1200);
 }
 
-// ─── Reveal checkboxes for issue dispatch ────────────────────────
+// ─── Post-analysis: make table read-only, show dispatch nav ─────
 function revealCheckboxesForIssues() {
-    document.getElementById('colAgentHeader').style.display = '';
+    // After analysis, the analyze table becomes read-only.
+    // Dispatch selection (checkboxes + agent dropdowns) lives in BUILD.
 
-    document.querySelectorAll('.unified-row').forEach(row => {
-        const checkTd = row.querySelector('.col-check');
-        const checkbox = checkTd.querySelector('input[type="checkbox"]');
-        checkbox.disabled = false;
+    // Hide checkbox column — no longer needed in analyze view
+    document.getElementById('colCheckHeader').style.display = 'none';
+    document.querySelectorAll('.unified-row .col-check').forEach(td => td.style.display = 'none');
 
-        const agentTd = row.querySelector('.col-agent-type');
-        agentTd.style.display = '';
-
-        const isNoGapRow = row.dataset.hasGap === '0';
-        if (isNoGapRow) {
-            checkbox.disabled = true;
-            checkbox.checked = false;
-            checkTd.querySelector('.checkmark').classList.add('checkmark-disabled');
-            row.classList.remove('selected');
-            agentTd.innerHTML = `<span class="text-muted">—</span>`;
-        } else {
-            checkbox.checked = true;
-            row.classList.add('selected');
-            const gapId = row.dataset.gapId || '0';
-            agentTd.innerHTML = `
-                <select class="agent-type-select" data-gap-id="${gapId}" data-row-index="${row.dataset.index}">
-                    <option value="local" selected>💻 Local Agent</option>
-                    <option value="cloud">☁️ Cloud Agent</option>
-                    <option value="developer">👤 Developer</option>
-                </select>
-            `;
-        }
+    // Disable all checkboxes
+    document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => {
+        cb.disabled = true;
     });
 
+    // Agent column stays hidden (dispatch agents are selected in BUILD)
+    // colAgentHeader stays display:none
+
+    // Pre-select actionable gaps for dispatch (BUILD will read this)
     gaps.forEach(g => { g.selected = g.hasGap; });
 
-    const selectAll = document.getElementById('selectAll');
-    selectAll.checked = gaps.filter(g => g.hasGap).length > 0;
-    updateSelectedCount();
+    // Show dispatch navigation button instead of inline dispatch
+    const actionableCount = gaps.filter(g => g.hasGap).length;
+    const btnDispatchNav = document.getElementById('btnDispatchNav');
+    if (btnDispatchNav) {
+        btnDispatchNav.style.display = '';
+        const countEl = document.getElementById('dispatchNavCount');
+        if (countEl) countEl.textContent = actionableCount;
+        btnDispatchNav.disabled = actionableCount === 0;
+    }
+
+    // Ensure old dispatch button stays hidden
+    const btnCreateIssues = document.getElementById('btnCreateIssues');
+    if (btnCreateIssues) btnCreateIssues.style.display = 'none';
 }
 
 // ─── Checkbox handling ──────────────────────────────────────────

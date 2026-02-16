@@ -38,6 +38,8 @@ import {
 import {
     dispatchSelected, renderDispatchTable, renderBuildPreview, dispatchRemaining,
     finishDispatch, renderCompletion, getDispatchedGapIds, isDispatchInProgress,
+    resetBuildFlow, handleBuildCheckboxChange, handleBuildSelectAll,
+    toggleBuildSelectAll, updateBuildSelectedCount,
 } from './build-flow.js';
 
 import {
@@ -75,6 +77,21 @@ function navigateToPhase(phase) {
 }
 
 /**
+ * Navigate to the BUILD panel for dispatch.
+ * Opens the slide-over if in loop view, or switches panel in tab view.
+ */
+function navigateToBuild() {
+    const detailOpen = store.get('detailPanelOpen');
+    if (detailOpen) {
+        // In slide-over mode: switch to build detail
+        openStageDetail('build');
+    } else {
+        // In tab mode: switch to build panel
+        navigateToPhase('build');
+    }
+}
+
+/**
  * Navigate back to the landing page. Confirms if a workflow is running.
  */
 function navigateToLanding() {
@@ -100,6 +117,7 @@ function returnToLoop() {
 function resetApp() {
     // Reset flow-specific state
     resetGaps();
+    resetBuildFlow();
     setAnalysisPhase('idle');
 
     // Reset store to initial state
@@ -118,6 +136,18 @@ function resetApp() {
     // Reset column visibility
     const colAgentHeader = document.getElementById('colAgentHeader');
     if (colAgentHeader) colAgentHeader.style.display = 'none';
+
+    // Reset build panel state
+    const buildColCheck = document.getElementById('buildColCheckHeader');
+    if (buildColCheck) buildColCheck.style.display = 'none';
+    const queueActions = document.getElementById('dispatchQueueActions');
+    if (queueActions) queueActions.style.display = 'none';
+    const dispatchActions = document.getElementById('dispatchActions');
+    if (dispatchActions) dispatchActions.style.display = 'none';
+    const dispatchBody = document.getElementById('dispatchTableBody');
+    if (dispatchBody) dispatchBody.innerHTML = '';
+    const btnDispatchNav = document.getElementById('btnDispatchNav');
+    if (btnDispatchNav) btnDispatchNav.style.display = 'none';
 
     // Reset QA UI elements
     const qaUrlBar = document.getElementById('qaDeployUrlBar');
@@ -174,11 +204,10 @@ eventBus.on('stage:render-action', ({ stage, stageData, actionArea }) => {
         if (actionableGaps.length > 0) {
             const btn = document.createElement('button');
             btn.className = 'stage-node-action-btn pulse';
-            btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Dispatch ${actionableGaps.length}`;
+            btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Select & Dispatch`;
             btn.onclick = (e) => {
                 e.stopPropagation();
-                gaps.forEach(g => { if (g.hasGap) g.selected = true; });
-                dispatchSelected();
+                openStageDetail('build');
             };
             actionArea.appendChild(btn);
         }
@@ -217,6 +246,9 @@ window.updateAnalyzeCount   = updateAnalyzeCount;
 window.dispatchSelected     = dispatchSelected;
 window.dispatchRemaining    = dispatchRemaining;
 window.finishDispatch       = finishDispatch;
+window.handleBuildCheckboxChange = handleBuildCheckboxChange;
+window.handleBuildSelectAll = handleBuildSelectAll;
+window.toggleBuildSelectAll = toggleBuildSelectAll;
 
 // Verify
 window.launchQAWorkflow     = launchQAWorkflow;
@@ -227,6 +259,7 @@ window.toggleQAMode         = toggleQAMode;
 // Navigation
 window.navigateToPhase      = navigateToPhase;
 window.navigateToLanding    = navigateToLanding;
+window.navigateToBuild      = navigateToBuild;
 window.returnToLoop         = returnToLoop;
 window.resetApp             = resetApp;
 

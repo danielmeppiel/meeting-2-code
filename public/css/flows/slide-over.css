@@ -1,0 +1,156 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   SLIDE-OVER PANEL (TASK 5)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.slide-over-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: var(--slideover-backdrop);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+}
+
+.slide-over-backdrop.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.slide-over {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--slideover-width);
+    z-index: 201;
+    background: var(--bg-primary);
+    border-left: 1px solid var(--border-subtle);
+    transform: translateX(100%);
+    transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.slide-over.active {
+    transform: translateX(0);
+}
+
+.slide-over-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-primary);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.slide-over-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.slide-over-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-lg);
+}
+
+/* Dim the loop container when slide-over is open */
+.loop-container.dimmed {
+    opacity: 0.4;
+    pointer-events: none;
+    transition: opacity 300ms ease;
+}
+
+/* Responsive slide-over widths */
+@media (max-width: 1199px) {
+    .slide-over {
+        width: var(--slideover-width-md);
+    }
+}
+
+@media (max-width: 899px) {
+    .slide-over {
+        width: var(--slideover-width-sm);
+    }
+}
+
+/* Panel overrides when re-parented into slide-over */
+.panel.in-slideover {
+    display: flex !important;
+    flex-direction: column;
+    position: relative !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    animation: none !important;
+    height: 100%;
+    overflow-y: auto;
+}
+
+/* Single-column flow in slide-over has no extra adjustments needed */
+.panel.in-slideover .so-flow {
+    max-width: 100%;
+}
+
+/* Panel-issues in slide-over: compact header, full-width table */
+.panel.in-slideover .panel-header {
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.panel.in-slideover .panel-actions {
+    flex-wrap: wrap;
+}
+
+.panel.in-slideover .panel-title {
+    font-size: 1.1rem;
+}
+
+/* QA panel in slide-over */
+.panel.in-slideover .qa-unified-header {
+    flex-direction: column;
+    gap: var(--space-md);
+    align-items: flex-start;
+}
+
+.panel.in-slideover .qa-unified-header-right {
+    width: 100%;
+}
+
+.panel.in-slideover .qa-btn-group {
+    width: 100%;
+}
+
+.panel.in-slideover .qa-btn-group .btn {
+    width: 100%;
+    justify-content: center;
+}
+    max-width: 100%;
+    border-right: none;
+}
+
+/* ─── Meet / Analyze panel content switching ───────────────────────────── */
+/* Meet mode: show everything (progress, brand, table) — this is the primary workspace */
+/* No rules needed — all children are visible by default */
+
+/* Analyze mode: hide the meet-specific elements (progress strip, meeting card, brand) */
+#panel-loading.stage-mode-analyze .so-progress,
+#panel-loading.stage-mode-analyze #meetingCard,
+#panel-loading.stage-mode-analyze #meetingSourceBrand {
+    display: none !important;
+}
+
+/* Ensure meeting brand banner doesn't get flex-squished */
+.meeting-source-brand {
+    flex-shrink: 0;
+}
+

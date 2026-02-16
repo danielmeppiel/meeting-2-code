@@ -1,0 +1,35 @@
+/* ─── Complexity Badge ─────────────────────────────────────────────────────── */
+.complexity-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-xs) var(--space-md);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.complexity-badge.low {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--complexity-low);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.complexity-badge.medium {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--complexity-medium);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.complexity-badge.high {
+    background: rgba(249, 115, 22, 0.1);
+    color: var(--complexity-high);
+    border: 1px solid rgba(249, 115, 22, 0.2);
+}
+
+.complexity-badge.critical {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--complexity-critical);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
