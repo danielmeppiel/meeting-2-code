@@ -3273,12 +3273,12 @@ body {
 
 /* Pulse animation to draw attention to the action button */
 .stage-node-action-btn.pulse {
-    animation: actionBtnPulse 2s ease-in-out infinite;
+    animation: actionBtnPulse 1.8s ease-in-out infinite;
 }
 
 @keyframes actionBtnPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.2); }
-    50% { box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.25); transform: scale(1); }
+    50% { box-shadow: 0 0 12px 4px rgba(255,255,255,0.08); transform: scale(1.03); }
 }
 
 /* Position each card at the extremes of the infinity loop lobes */
@@ -3289,20 +3289,24 @@ body {
 
 /* ─── Stage Node States ────────────────────────────────────────────────────── */
 
-/* Idle — dim, outline only */
+/* Idle — very dim, not yet reached */
 .stage-node--idle {
-    opacity: 0.35;
-    border-color: var(--border-subtle);
-    background: rgba(24, 24, 30, 0.4);
+    opacity: 0.22;
+    border-color: rgba(255, 255, 255, 0.04);
+    background: rgba(24, 24, 30, 0.3);
 }
-.stage-node--idle .stage-node-icon { opacity: 0.3; }
+.stage-node--idle .stage-node-icon { opacity: 0.2; }
 
-/* Waiting — slightly brighter, pulsing border */
+/* Waiting — bright, attention-grabbing; this is where the user acts next */
 .stage-node--waiting {
-    opacity: 0.75;
+    opacity: 1;
     cursor: pointer;
+    background: rgba(24, 24, 30, 0.85);
 }
-.stage-node--waiting .stage-node-icon { opacity: 0.5; }
+.stage-node--waiting .stage-node-icon { opacity: 0.8; }
+.stage-node--waiting .stage-node-name { color: var(--text-primary); }
+.stage-node--waiting .stage-node-metric { color: var(--text-secondary); }
+.stage-node--waiting .stage-node-status-text { color: var(--text-secondary); }
 
 /* Active — full brightness, glowing border, spinner icon */
 .stage-node--active {
@@ -3331,9 +3335,10 @@ body {
 }
 .stage-node--meet.stage-node--active .stage-node-icon { color: var(--stage-meet); }
 .stage-node--meet.stage-node--waiting {
-    border-color: rgba(59, 130, 246, 0.3);
+    border-color: rgba(59, 130, 246, 0.4);
     animation: stage-pulse-meet 2s ease-in-out infinite;
 }
+.stage-node--meet.stage-node--waiting .stage-node-icon { color: var(--stage-meet); }
 
 .stage-node--analyze.stage-node--active {
     border-color: var(--stage-analyze);
@@ -3341,9 +3346,10 @@ body {
 }
 .stage-node--analyze.stage-node--active .stage-node-icon { color: var(--stage-analyze); }
 .stage-node--analyze.stage-node--waiting {
-    border-color: rgba(245, 158, 11, 0.3);
+    border-color: rgba(245, 158, 11, 0.4);
     animation: stage-pulse-analyze 2s ease-in-out infinite;
 }
+.stage-node--analyze.stage-node--waiting .stage-node-icon { color: var(--stage-analyze); }
 
 .stage-node--build.stage-node--active {
     border-color: var(--stage-build);
@@ -3351,9 +3357,10 @@ body {
 }
 .stage-node--build.stage-node--active .stage-node-icon { color: var(--stage-build); }
 .stage-node--build.stage-node--waiting {
-    border-color: rgba(16, 185, 129, 0.3);
+    border-color: rgba(16, 185, 129, 0.4);
     animation: stage-pulse-build 2s ease-in-out infinite;
 }
+.stage-node--build.stage-node--waiting .stage-node-icon { color: var(--stage-build); }
 
 .stage-node--verify.stage-node--active {
     border-color: var(--stage-verify);
@@ -3361,45 +3368,71 @@ body {
 }
 .stage-node--verify.stage-node--active .stage-node-icon { color: var(--stage-verify); }
 .stage-node--verify.stage-node--waiting {
-    border-color: rgba(139, 92, 246, 0.3);
+    border-color: rgba(139, 92, 246, 0.4);
     animation: stage-pulse-verify 2s ease-in-out infinite;
 }
+.stage-node--verify.stage-node--waiting .stage-node-icon { color: var(--stage-verify); }
 
-/* Waiting pulse animations per stage */
+/* Waiting pulse animations per stage — stronger glow to attract attention */
 @keyframes stage-pulse-meet {
-    0%, 100% { box-shadow: 0 0 0 rgba(59, 130, 246, 0); border-color: rgba(59, 130, 246, 0.2); }
-    50% { box-shadow: 0 0 12px rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.4); }
+    0%, 100% { box-shadow: 0 0 8px rgba(59, 130, 246, 0.1); border-color: rgba(59, 130, 246, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.25), 0 0 40px rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.55); }
 }
 @keyframes stage-pulse-analyze {
-    0%, 100% { box-shadow: 0 0 0 rgba(245, 158, 11, 0); border-color: rgba(245, 158, 11, 0.2); }
-    50% { box-shadow: 0 0 12px rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); }
+    0%, 100% { box-shadow: 0 0 8px rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.25), 0 0 40px rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.55); }
 }
 @keyframes stage-pulse-build {
-    0%, 100% { box-shadow: 0 0 0 rgba(16, 185, 129, 0); border-color: rgba(16, 185, 129, 0.2); }
-    50% { box-shadow: 0 0 12px rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.4); }
+    0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(16, 185, 129, 0.25), 0 0 40px rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.55); }
 }
 @keyframes stage-pulse-verify {
-    0%, 100% { box-shadow: 0 0 0 rgba(139, 92, 246, 0); border-color: rgba(139, 92, 246, 0.2); }
-    50% { box-shadow: 0 0 12px rgba(139, 92, 246, 0.15); border-color: rgba(139, 92, 246, 0.4); }
+    0%, 100% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.1); border-color: rgba(139, 92, 246, 0.3); }
+    50% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.25), 0 0 40px rgba(139, 92, 246, 0.08); border-color: rgba(139, 92, 246, 0.55); }
 }
 
-/* Complete — checkmark, green accent */
+/* Complete — settled, retains stage's own color (dimmed) */
 .stage-node--complete {
-    opacity: 0.8;
+    opacity: 0.55;
     cursor: pointer;
-    border-color: rgba(16, 185, 129, 0.3);
-    background: rgba(16, 185, 129, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(24, 24, 30, 0.5);
 }
 .stage-node--complete .stage-node-icon {
-    opacity: 1;
-    color: var(--accent-emerald);
+    opacity: 0.7;
+    color: var(--text-secondary);
 }
 .stage-node--complete .stage-node-name {
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
+}
+.stage-node--complete .stage-node-metric {
+    color: var(--text-tertiary);
 }
 .stage-node--complete .stage-node-status-text {
     color: var(--accent-emerald);
+    opacity: 0.8;
 }
+
+/* Per-stage complete: subtle left accent in original color */
+.stage-node--meet.stage-node--complete {
+    border-left: 2px solid rgba(59, 130, 246, 0.4);
+}
+.stage-node--meet.stage-node--complete .stage-node-icon { color: rgba(59, 130, 246, 0.6); }
+
+.stage-node--analyze.stage-node--complete {
+    border-left: 2px solid rgba(245, 158, 11, 0.4);
+}
+.stage-node--analyze.stage-node--complete .stage-node-icon { color: rgba(245, 158, 11, 0.6); }
+
+.stage-node--build.stage-node--complete {
+    border-left: 2px solid rgba(16, 185, 129, 0.4);
+}
+.stage-node--build.stage-node--complete .stage-node-icon { color: rgba(16, 185, 129, 0.6); }
+
+.stage-node--verify.stage-node--complete {
+    border-left: 2px solid rgba(139, 92, 246, 0.4);
+}
+.stage-node--verify.stage-node--complete .stage-node-icon { color: rgba(139, 92, 246, 0.6); }
 
 /* Error — red glow */
 .stage-node--error {
@@ -3613,6 +3646,7 @@ body {
 /* Panel overrides when re-parented into slide-over */
 .panel.in-slideover {
     display: flex !important;
+    flex-direction: column;
     position: relative !important;
     opacity: 1 !important;
     pointer-events: auto !important;
@@ -3661,6 +3695,22 @@ body {
 }
     max-width: 100%;
     border-right: none;
+}
+
+/* ─── Meet / Analyze panel content switching ───────────────────────────── */
+/* Meet mode: show everything (progress, brand, table) — this is the primary workspace */
+/* No rules needed — all children are visible by default */
+
+/* Analyze mode: hide the meet-specific elements (progress strip, meeting card, brand) */
+#panel-loading.stage-mode-analyze .so-progress,
+#panel-loading.stage-mode-analyze #meetingCard,
+#panel-loading.stage-mode-analyze #meetingSourceBrand {
+    display: none !important;
+}
+
+/* Ensure meeting brand banner doesn't get flex-squished */
+.meeting-source-brand {
+    flex-shrink: 0;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

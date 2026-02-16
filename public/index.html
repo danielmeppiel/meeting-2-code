@@ -489,17 +489,18 @@
 
             <!-- Step 3: Dispatch -->
             <section class="panel" id="panel-issues">
+              <div class="so-flow">
                 <!-- Dispatch header -->
-                <div class="panel-header" id="dispatchHeader">
+                <div class="so-content-header" id="dispatchHeader">
                     <div>
-                        <h2 class="panel-title">
-                            <span class="agent-badge agent-badge--builder" style="margin-right: 8px;">
+                        <h2 class="so-content-title" style="display:flex;align-items:center;gap:8px;">
+                            <span class="agent-badge agent-badge--builder">
                                 <span class="agent-avatar">B</span>
                                 <span class="agent-name">Builder</span>
                             </span>
                             Dispatching Requirements
                         </h2>
-                        <p class="panel-subtitle" id="dispatchSubtitle">
+                        <p class="so-content-sub" id="dispatchSubtitle">
                             <span id="dispatchedCount">0</span> dispatched &middot;
                             <span id="dispatchPendingCount">0</span> remaining
                             <a id="dispatchEpicLink" href="#" target="_blank" class="epic-link" style="display:none;">
@@ -508,7 +509,7 @@
                             </a>
                         </p>
                     </div>
-                    <div class="panel-actions" id="dispatchActions" style="display:none;">
+                    <div class="so-actions" id="dispatchActions" style="display:none;">
                         <button class="btn btn-primary" id="btnDispatchMore" onclick="dispatchRemaining()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
@@ -546,12 +547,13 @@
                 </div>
 
                 <!-- Agent log (collapsed by default) -->
-                <details class="dispatch-log-details" id="dispatchLogDetails">
-                    <summary>Agent activity log</summary>
+                <details class="so-log-section" id="dispatchLogDetails">
+                    <summary class="so-log-toggle">Agent activity log</summary>
                     <div class="agent-log agent-log-compact" style="margin-top: var(--space-sm); max-height: 160px;">
                         <div class="agent-log-entries" id="issueLogEntries"></div>
                     </div>
                 </details>
+              </div>
             </section>
 
             <!-- Step 4: Completion -->
@@ -681,6 +683,6 @@
 
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>
