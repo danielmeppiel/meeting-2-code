@@ -335,12 +335,22 @@ export function setActiveAgent(agentKey) {
 
 /**
  * Append a timestamped log entry to a container and the activity feed.
+ * Auto-opens the parent <details> element and removes placeholders.
  * @param {string} containerId - DOM id of the log container.
  * @param {string} message
  */
 export function appendLog(containerId, message) {
     const container = document.getElementById(containerId);
     if (!container) return;
+
+    // Remove empty-state placeholder if present
+    const placeholder = container.querySelector('.log-placeholder');
+    if (placeholder) placeholder.remove();
+
+    // Auto-open parent <details> on first real log entry
+    const details = container.closest('details');
+    if (details && !details.open) details.open = true;
+
     const entry = document.createElement('div');
     entry.className = 'agent-log-entry';
     const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });

@@ -36,7 +36,7 @@ import {
 } from './analyze-flow.js';
 
 import {
-    dispatchSelected, renderDispatchTable, dispatchRemaining,
+    dispatchSelected, renderDispatchTable, renderBuildPreview, dispatchRemaining,
     finishDispatch, renderCompletion, getDispatchedGapIds, isDispatchInProgress,
 } from './build-flow.js';
 
@@ -128,6 +128,23 @@ function resetApp() {
     // Re-render loop nodes (will show all idle)
     renderLoopNodes();
 }
+
+// ═════════════════════════════════════════════════════════════════
+// Auto-populate build panel when shown (via nav or slide-over)
+// ═════════════════════════════════════════════════════════════════
+
+eventBus.on(Events.PANEL_CHANGED, ({ panelId }) => {
+    if (panelId === 'panel-issues') {
+        renderBuildPreview();
+    }
+});
+
+// Also populate build preview when opening the build stage via slide-over
+eventBus.on(Events.STAGE_DETAIL_OPENED, ({ stage }) => {
+    if (stage === 'build') {
+        renderBuildPreview();
+    }
+});
 
 // ═════════════════════════════════════════════════════════════════
 // Wire stage-node action buttons via event bus

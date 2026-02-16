@@ -23,6 +23,58 @@ export function getDispatchedGapIds() { return dispatchedGapIds; }
 /** @returns {boolean} Whether a dispatch is currently in progress. */
 export function isDispatchInProgress() { return dispatchInProgress; }
 
+// ─── Build Preview (pre-dispatch table) ─────────────────────────
+/**
+ * Populate the dispatch table with analyzed gaps in a "Ready" state,
+ * so the Build panel isn't empty before the user dispatches.
+ * No-ops if dispatch is already in progress or completed.
+ */
+export function renderBuildPreview() {
+    const gaps = getGaps();
+    const allActionable = gaps.filter(g => g.hasGap);
+
+    // Don't override if dispatch already happened or is running
+    if (dispatchInProgress || dispatchedGapIds.size > 0) return;
+    if (allActionable.length === 0) return;
+
+    const tbody = document.getElementById('dispatchTableBody');
+    if (!tbody) return;
+    // Don't override if already populated by a real dispatch
+    if (tbody.children.length > 0) return;
+
+    tbody.innerHTML = '';
+
+    allActionable.forEach((gap, i) => {
+        const tr = document.createElement('tr');
+        tr.id = `dispatch-row-${gap.id}`;
+        tr.className = 'dispatch-row remaining';
+        tr.style.animationDelay = `${i * 0.04}s`;
+
+        tr.innerHTML = `
+            <td class="col-req"><div class="td-requirement">${escapeHtml(gap.requirement)}</div></td>
+            <td class="col-dispatch-mode"><span class="dispatch-mode-badge pending">\u2014</span></td>
+            <td class="col-dispatch-issue" id="dispatch-issue-${gap.id}"><span class="text-muted">\u2014</span></td>
+            <td class="col-dispatch-status" id="dispatch-status-${gap.id}"><span class="status-chip pending">Ready</span></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Update header counts
+    document.getElementById('dispatchedCount').textContent = '0';
+    document.getElementById('dispatchPendingCount').textContent = allActionable.length;
+
+    // Show epic link if available
+    const epicIssue = store.get('epicIssue');
+    if (epicIssue && epicIssue.number > 0 && epicIssue.url) {
+        const epicLink = document.getElementById('dispatchEpicLink');
+        if (epicLink) {
+            epicLink.href = epicIssue.url;
+            epicLink.style.display = 'inline-flex';
+            document.getElementById('dispatchEpicNumber').textContent = epicIssue.number;
+        }
+    }
+}
+
 function incrementDispatchProgress() {
     dispatchCompletedItems++;
     if (dispatchTotalItems > 0) {
