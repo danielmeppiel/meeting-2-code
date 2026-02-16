@@ -18,6 +18,454 @@ let previousPanel = 'panel-analyze';
 let activePhase = 'meeting'; // 'meeting' | 'analyze' | 'build' | 'verify'
 let completedPhases = new Set();
 
+// ─── Loop State ───────────────────────────────────────────────────────────────
+const loopState = {
+    meetingName: '',
+    iteration: 1,
+    activeStage: null, // 'meet' | 'analyze' | 'build' | 'verify' | null
+    stages: {
+        meet:    { status: 'idle', metrics: {}, startTime: null, endTime: null },
+        analyze: { status: 'idle', metrics: {}, startTime: null, endTime: null },
+        build:   { status: 'idle', metrics: {}, startTime: null, endTime: null },
+        verify:  { status: 'idle', metrics: {}, startTime: null, endTime: null },
+    },
+    detailPanelOpen: null, // 'meet' | 'analyze' | 'build' | 'verify' | null
+};
+
+function updateLoopState(patch) {
+    // Deep merge patch into loopState
+    if (patch.meetingName !== undefined) loopState.meetingName = patch.meetingName;
+    if (patch.iteration !== undefined) loopState.iteration = patch.iteration;
+    if (patch.activeStage !== undefined) loopState.activeStage = patch.activeStage;
+    if (patch.detailPanelOpen !== undefined) loopState.detailPanelOpen = patch.detailPanelOpen;
+    if (patch.stages) {
+        for (const [stage, data] of Object.entries(patch.stages)) {
+            if (loopState.stages[stage]) {
+                if (data.status !== undefined) loopState.stages[stage].status = data.status;
+                if (data.startTime !== undefined) loopState.stages[stage].startTime = data.startTime;
+                if (data.endTime !== undefined) loopState.stages[stage].endTime = data.endTime;
+                if (data.metrics) {
+                    loopState.stages[stage].metrics = { ...loopState.stages[stage].metrics, ...data.metrics };
+                }
+            }
+        }
+    }
+    renderLoopNodes();
+    // Refresh header if meetingName or iteration changed and header is visible
+    if (patch.meetingName !== undefined || patch.iteration !== undefined) {
+        const loopInfo = document.getElementById('loopHeaderInfo');
+        if (loopInfo && loopInfo.style.display !== 'none') {
+            document.getElementById('loopMeetingName').textContent = loopState.meetingName || 'Meeting';
+            document.getElementById('iterationBadge').textContent = `⟳ Iteration #${loopState.iteration || 1}`;
+        }
+    }
+}
+
+function renderLoopNodes() {
+    const stageNames = ['meet', 'analyze', 'build', 'verify'];
+    stageNames.forEach(stage => {
+        const card = document.querySelector(`.stage-node--${stage}`);
+        if (!card) return;
+
+        const stageData = loopState.stages[stage];
+
+        // Remove all state classes, then add the current one
+        card.classList.remove('stage-node--idle', 'stage-node--waiting', 'stage-node--active', 'stage-node--complete', 'stage-node--error');
+        card.classList.add(`stage-node--${stageData.status}`);
+
+        // Update metrics
+        const primaryMetric = card.querySelector('[data-metric="primary"]');
+        const secondaryMetric = card.querySelector('[data-metric="secondary"]');
+        if (primaryMetric) {
+            primaryMetric.textContent = stageData.metrics.primary || '—';
+        }
+        if (secondaryMetric) {
+            secondaryMetric.textContent = stageData.metrics.secondary || '—';
+        }
+
+        // Update status text
+        const statusText = card.querySelector('.stage-node-status-text');
+        if (statusText) {
+            const statusLabels = {
+                idle: 'Idle',
+                waiting: 'Waiting...',
+                active: 'In Progress',
+                complete: 'Complete ✓',
+                error: 'Error',
+            };
+            statusText.textContent = stageData.metrics.statusText || statusLabels[stageData.status] || 'Idle';
+        }
+
+        // Update icon
+        const icon = card.querySelector('.stage-node-icon');
+        if (icon) {
+            const icons = {
+                idle: '◉',
+                waiting: '◉',
+                active: '⟳',
+                complete: '✓',
+                error: '✗',
+            };
+            icon.textContent = icons[stageData.status] || '◉';
+        }
+
+        // Update action button area
+        const actionArea = card.querySelector('.stage-node-action');
+        if (actionArea) {
+            renderStageAction(stage, stageData, actionArea);
+        }
+    });
+
+    // Sync particle system with active stage
+    if (loopParticles) {
+        loopParticles.setActiveStage(loopState.activeStage);
+    }
+}
+
+/**
+ * Render context-aware action buttons on stage node cards.
+ * These let users control the flow directly from the loop without opening the slide-over.
+ */
+function renderStageAction(stage, stageData, actionArea) {
+    // Clear previous
+    actionArea.innerHTML = '';
+
+    if (stage === 'analyze' && stageData.status === 'waiting') {
+        // Meet completed → user can analyze all requirements from the loop
+        const count = requirements.length;
+        if (count > 0) {
+            const btn = document.createElement('button');
+            btn.className = 'stage-node-action-btn pulse';
+            btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Analyze ${count}`;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                // Select all requirements then start gap analysis
+                document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => { cb.checked = true; });
+                if (typeof updateAnalyzeCount === 'function') updateAnalyzeCount();
+                startGapAnalysis();
+            };
+            actionArea.appendChild(btn);
+        }
+    } else if (stage === 'build' && stageData.status === 'waiting') {
+        // Analyze completed → user can dispatch from the loop
+        const actionableGaps = gaps.filter(g => g.hasGap);
+        const count = actionableGaps.length;
+        if (count > 0) {
+            const btn = document.createElement('button');
+            btn.className = 'stage-node-action-btn pulse';
+            btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Dispatch ${count}`;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                // Select all gap-found items then dispatch
+                gaps.forEach(g => { if (g.hasGap) g.selected = true; });
+                dispatchSelected();
+            };
+            actionArea.appendChild(btn);
+        }
+    } else if (stage === 'verify' && stageData.status === 'waiting') {
+        // Build completed → user can ship & validate from the loop
+        const btn = document.createElement('button');
+        btn.className = 'stage-node-action-btn pulse';
+        btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Ship & Validate`;
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            qaMode = true;
+            try { buildQAGapTable(); } catch(_) {}
+            showPanel('panel-qa');
+            launchQAWorkflow();
+        };
+        actionArea.appendChild(btn);
+    }
+}
+
+function advanceStage(from, to) {
+    const now = Date.now();
+    const patch = { activeStage: to, stages: {} };
+    if (from && loopState.stages[from]) {
+        patch.stages[from] = { status: 'complete', endTime: now };
+    }
+    if (to && loopState.stages[to]) {
+        patch.stages[to] = { status: 'active', startTime: now };
+    }
+    updateLoopState(patch);
+    // Placeholder for particle burst (Task 8 will implement)
+    if (typeof triggerParticleBurst === 'function') {
+        triggerParticleBurst(from, to);
+    }
+}
+
+// ─── Particle Animation System (TASK 8 + TASK 9) ─────────────────────────────
+
+class LoopParticleSystem {
+    constructor() {
+        this.pathEl = document.getElementById('loop-path');
+        this.container = document.getElementById('loopParticles');
+        this.particles = [];
+        this.animationId = null;
+        this.lastTimestamp = 0;
+        this.running = false;
+        this.activeStage = null;
+        this.totalLength = 0;
+
+        // Stage color mapping
+        this.stageColors = {
+            meet: '#3b82f6',
+            analyze: '#f59e0b',
+            build: '#10b981',
+            verify: '#8b5cf6',
+        };
+
+        // Segment boundaries (fraction of total path length)
+        // The figure-8 path goes: Meet(top-left) → Analyze(bottom-left) → center → Build(top-right) → Verify(bottom-right) → center → back
+        // Approximate 4 equal quarters
+        this.segments = {
+            meet:    { start: 0.00, end: 0.25 },
+            analyze: { start: 0.25, end: 0.50 },
+            build:   { start: 0.50, end: 0.75 },
+            verify:  { start: 0.75, end: 1.00 },
+        };
+    }
+
+    init() {
+        if (!this.pathEl || !this.container) return;
+        this.totalLength = this.pathEl.getTotalLength();
+        this._createParticles(14);
+    }
+
+    _createParticles(count) {
+        for (let i = 0; i < count; i++) {
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('r', '4');
+            circle.setAttribute('fill', '#ffffff');
+            circle.setAttribute('opacity', '0');
+            circle.classList.add('loop-particle');
+            this.container.appendChild(circle);
+
+            this.particles.push({
+                element: circle,
+                offset: (i / count) * this.totalLength,
+                speed: 50 + Math.random() * 25, // px per second
+                baseSpeed: 50 + Math.random() * 25,
+                radius: 3 + Math.random() * 2.5,
+                opacity: 0.7 + Math.random() * 0.3,
+            });
+        }
+    }
+
+    start(activeStage) {
+        if (!this.pathEl || this.running) return;
+        this.activeStage = activeStage;
+        this.running = true;
+        this.lastTimestamp = performance.now();
+
+        // Make particles visible
+        this.particles.forEach(p => {
+            p.element.setAttribute('opacity', String(p.opacity));
+            p.element.setAttribute('r', String(p.radius));
+        });
+
+        this.animationId = requestAnimationFrame((t) => this._animate(t));
+    }
+
+    stop() {
+        this.running = false;
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+        // Fade particles out
+        this.particles.forEach(p => {
+            p.element.setAttribute('opacity', '0');
+        });
+    }
+
+    setActiveStage(stage) {
+        this.activeStage = stage;
+        if (stage && !this.running) {
+            this.start(stage);
+        } else if (!stage) {
+            this.stop();
+        }
+    }
+
+    _getSegmentForOffset(normalizedOffset) {
+        for (const [name, seg] of Object.entries(this.segments)) {
+            if (normalizedOffset >= seg.start && normalizedOffset < seg.end) {
+                return name;
+            }
+        }
+        return 'meet'; // wrap-around
+    }
+
+    _getColorForOffset(normalizedOffset) {
+        const segment = this._getSegmentForOffset(normalizedOffset);
+        return this.stageColors[segment] || '#ffffff';
+    }
+
+    _isInActiveSegment(normalizedOffset) {
+        if (!this.activeStage) return false;
+        const seg = this.segments[this.activeStage];
+        return normalizedOffset >= seg.start && normalizedOffset < seg.end;
+    }
+
+    _animate(timestamp) {
+        if (!this.running) return;
+
+        const delta = Math.min(timestamp - this.lastTimestamp, 50); // Cap delta to prevent jumps
+        this.lastTimestamp = timestamp;
+
+        this.particles.forEach(p => {
+            const normalizedOffset = p.offset / this.totalLength;
+            const inActive = this._isInActiveSegment(normalizedOffset);
+
+            // Speed modulation: 2x in active segment
+            const currentSpeed = inActive ? p.baseSpeed * 2 : p.baseSpeed;
+            p.offset = (p.offset + currentSpeed * delta * 0.001) % this.totalLength;
+
+            // Position
+            const point = this.pathEl.getPointAtLength(p.offset);
+            p.element.setAttribute('cx', point.x);
+            p.element.setAttribute('cy', point.y);
+
+            // Color based on segment
+            const color = this._getColorForOffset(p.offset / this.totalLength);
+            p.element.setAttribute('fill', color);
+
+            // Size modulation: larger in active segment
+            const size = inActive ? p.radius * 1.8 : p.radius;
+            p.element.setAttribute('r', String(size));
+
+            // Opacity modulation
+            const opacity = inActive ? Math.min(p.opacity * 1.4, 1) : p.opacity * 0.6;
+            p.element.setAttribute('opacity', String(opacity));
+        });
+
+        this.animationId = requestAnimationFrame((t) => this._animate(t));
+    }
+
+    // ── TASK 9: Handoff burst ──
+    triggerBurst(fromStage, toStage) {
+        if (!this.pathEl || !this.container) return;
+
+        const fromSeg = this.segments[fromStage];
+        const toSeg = this.segments[toStage];
+        if (!fromSeg || !toSeg) return;
+
+        // Create 4 burst particles at the fromStage position
+        const startOffset = fromSeg.end * this.totalLength;
+        const burstParticles = [];
+
+        for (let i = 0; i < 4; i++) {
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            const r = i === 0 ? 7 : 4; // lead particle is bigger
+            circle.setAttribute('r', String(r));
+            circle.setAttribute('fill', this.stageColors[fromStage] || '#fff');
+            circle.setAttribute('opacity', i === 0 ? '1' : '0.7');
+            circle.classList.add('loop-particle', 'loop-particle--burst');
+            this.container.appendChild(circle);
+            burstParticles.push({
+                element: circle,
+                offset: startOffset + (i * -8), // staggered start
+                speed: 120 + i * 15, // lead is fastest
+                targetOffset: toSeg.start * this.totalLength,
+            });
+        }
+
+        // Animate burst particles along path toward target
+        let burstStart = performance.now();
+        const animateBurst = (timestamp) => {
+            const elapsed = timestamp - burstStart;
+            let allArrived = true;
+
+            burstParticles.forEach(bp => {
+                bp.offset = (bp.offset + bp.speed * 16 * 0.001) % this.totalLength;
+                const point = this.pathEl.getPointAtLength(bp.offset);
+                bp.element.setAttribute('cx', point.x);
+                bp.element.setAttribute('cy', point.y);
+
+                // Fade out as they approach target
+                const fadeProgress = Math.min(elapsed / 800, 1);
+                bp.element.setAttribute('opacity', String(Math.max(1 - fadeProgress, 0)));
+
+                if (elapsed < 800) allArrived = false;
+            });
+
+            if (!allArrived) {
+                requestAnimationFrame(animateBurst);
+            } else {
+                // Clean up burst particles
+                burstParticles.forEach(bp => bp.element.remove());
+                // Trigger crossover flash at center if crossing lobes
+                this._triggerCrossoverFlash();
+            }
+        };
+        requestAnimationFrame(animateBurst);
+
+        // Ensure the particle system is running for the new stage
+        if (toStage) this.setActiveStage(toStage);
+    }
+
+    // ── TASK 9: Crossover flash ──
+    _triggerCrossoverFlash() {
+        const loopContainer = document.querySelector('.loop-container');
+        if (!loopContainer) return;
+
+        const flash = document.createElement('div');
+        flash.className = 'loop-crossover-burst';
+        loopContainer.appendChild(flash);
+
+        // Remove after animation completes
+        flash.addEventListener('animationend', () => flash.remove());
+    }
+
+    // Celebratory full-loop sweep
+    celebratoryLoop() {
+        if (!this.pathEl) return;
+        const sweep = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        sweep.setAttribute('r', '8');
+        sweep.setAttribute('fill', '#ffffff');
+        sweep.setAttribute('opacity', '1');
+        sweep.classList.add('loop-particle', 'loop-particle--celebration');
+        this.container.appendChild(sweep);
+
+        let offset = 0;
+        const totalLen = this.totalLength;
+        const speed = 200; // fast sweep
+
+        const animateSweep = (timestamp) => {
+            offset += speed * 16 * 0.001;
+            if (offset >= totalLen) {
+                sweep.remove();
+                return;
+            }
+            const point = this.pathEl.getPointAtLength(offset);
+            sweep.setAttribute('cx', point.x);
+            sweep.setAttribute('cy', point.y);
+            sweep.setAttribute('fill', this._getColorForOffset(offset / totalLen));
+            const fadeOut = Math.max(1 - (offset / totalLen) * 0.3, 0.5);
+            sweep.setAttribute('opacity', String(fadeOut));
+            requestAnimationFrame(animateSweep);
+        };
+        requestAnimationFrame(animateSweep);
+    }
+}
+
+// Global particle system instance
+let loopParticles = null;
+
+// Initialize on DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+    loopParticles = new LoopParticleSystem();
+    loopParticles.init();
+});
+
+// Global function called by advanceStage()
+function triggerParticleBurst(fromStage, toStage) {
+    if (loopParticles) {
+        loopParticles.triggerBurst(fromStage, toStage);
+    }
+}
+
 // ─── Meeting Input Wiring ─────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('meetingNameInput');
@@ -114,6 +562,32 @@ function appendLog(containerId, message) {
     // Scroll the parent .agent-log container (which has overflow-y: auto)
     const scrollable = container.closest('.agent-log') || container;
     scrollable.scrollTop = scrollable.scrollHeight;
+    // Also append to the activity feed on the loop view
+    appendToActivityFeed(null, message);
+}
+
+function appendToActivityFeed(agentName, message) {
+    const feed = document.getElementById('activityFeedEntries');
+    if (!feed) return;
+    // Remove placeholder
+    const placeholder = feed.querySelector('.activity-feed-entry');
+    if (placeholder && placeholder.textContent === 'Waiting for activity...') {
+        placeholder.remove();
+    }
+    const entry = document.createElement('div');
+    entry.className = 'activity-feed-entry';
+    const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const agentClass = agentName ? agentName.toLowerCase().replace(/\s+/g, '') : '';
+    entry.innerHTML = `<span class="log-time">${time}</span>${agentName ? ` <span class="activity-agent ${agentClass}">${escapeHtml(agentName)}:</span>` : ''} ${escapeHtml(message)}`;
+    feed.appendChild(entry);
+    feed.scrollTop = feed.scrollHeight;
+    // Keep only last 50 entries
+    while (feed.children.length > 50) feed.removeChild(feed.firstChild);
+}
+
+function toggleActivityFeed() {
+    const feed = document.getElementById('activityFeed');
+    if (feed) feed.classList.toggle('expanded');
 }
 
 // ─── Agent Identity ─────────────────────────────────────────────────────────────
@@ -207,7 +681,7 @@ function populateMeetingBanner(info) {
 }
 
 // ─── Step 1: Analyze Meeting ──────────────────────────────────────────────────
-const stepIds = ['ls-fetch', 'ls-extract', 'ls-requirements', 'ls-analyze', 'ls-complexity'];
+const stepIds = ['ls-fetch', 'ls-extract', 'ls-requirements', 'ls-analyze'];
 
 function markStep(stepNum) {
     stepIds.forEach((id, i) => {
@@ -243,7 +717,17 @@ async function startAnalysis() {
     analysisPhase = 'extracting';
 
     setStatus('Analyzing...', 'processing');
-    showPanel('panel-loading');
+    // Update loop state — Meet stage starting
+    updateLoopState({
+        meetingName: meetingName,
+        activeStage: 'meet',
+        stages: { meet: { status: 'active', startTime: Date.now(), metrics: { primary: 'Extracting...', secondary: '', statusText: 'WorkIQ Running' } } }
+    });
+    showPanel('panel-loop');
+    showLoopHeader(true);
+
+    // Auto-open the Meet stage slide-over so user sees progress immediately
+    setTimeout(() => openStageDetail('meet'), 400);
 
     // Reset progress steps
     stepIds.forEach(s => {
@@ -303,6 +787,8 @@ async function startAnalysis() {
                 const { step, message } = JSON.parse(e.data);
                 console.log(`[Progress] Step ${step}: ${message}`);
                 markStep(step);
+                const progressMessages = ['Connecting...', 'Fetching data...', 'Extracting requirements...', 'Creating epic...'];
+                updateLoopState({ stages: { meet: { metrics: { statusText: progressMessages[step] || 'Processing...' } } } });
 
                 // Keep meeting card in sync with progress steps
                 const cardTitle = document.getElementById('meetingCardTitle');
@@ -347,6 +833,7 @@ async function startAnalysis() {
                     el.style.display = 'flex';
                     el.innerHTML = info.participants.map(p => `<span class="participant-chip">${escapeHtml(p)}</span>`).join('');
                 }
+                updateLoopState({ stages: { meet: { metrics: { secondary: info.date || '' } } } });
                 // Show agent attribution
                 const agentAttr = document.getElementById('meetingCardAgent');
                 if (agentAttr) agentAttr.style.display = 'flex';
@@ -358,6 +845,7 @@ async function startAnalysis() {
             eventSource.addEventListener('requirements', (e) => {
                 const data = JSON.parse(e.data);
                 requirements = data.requirements;
+                updateLoopState({ stages: { meet: { metrics: { primary: `${requirements.length} requirements` } } } });
                 console.log(`[Requirements] ${requirements.length} items`);
                 updateQAFabVisibility();
                 // Hide meeting card, show table with checkboxes
@@ -392,6 +880,8 @@ async function startAnalysis() {
                     el.classList.add('done');
                     el.querySelector('.loading-step-icon').classList.remove('spinner');
                 });
+                // Advance loop state: Meet complete
+                updateLoopState({ stages: { meet: { status: 'complete', endTime: Date.now(), metrics: { statusText: 'Complete ✓', primary: `${requirements.length} requirements` } } } });
                 resolve(data);
             });
 
@@ -413,6 +903,8 @@ async function startAnalysis() {
         analysisPhase = 'selecting';
         setStatus(`${requirements.length} Requirements`, '');
         setStep(2);
+    // Set Analyze as waiting since user needs to select and click "Analyze Gaps"
+    updateLoopState({ stages: { analyze: { status: 'waiting', metrics: { primary: 'Select & Analyze', statusText: 'Waiting...' } } } });
 
     } catch (error) {
         showToast(error.message);
@@ -427,19 +919,31 @@ async function startAnalysis() {
 
 function renderRequirementsForSelection(reqs) {
     const container = document.getElementById('unifiedTableContainer');
-    const tbody = document.getElementById('unifiedTableBody');
     const count = document.getElementById('reqCount');
 
     container.style.display = '';
     count.textContent = reqs.length;
+
+    // Show the table directly (no cards)
+    const tableEl = document.getElementById('unifiedTable');
+    if (tableEl) tableEl.style.display = '';
+    const tableContainer = container.querySelector('.table-container');
+    if (tableContainer) tableContainer.style.display = '';
+
+    // Remove any existing card container from previous render
+    const oldCardContainer = document.getElementById('reqCardContainer');
+    if (oldCardContainer) oldCardContainer.remove();
+
+    const tbody = document.getElementById('unifiedTableBody');
     tbody.innerHTML = '';
 
     reqs.forEach((req, i) => {
         const tr = document.createElement('tr');
         tr.id = `unified-row-${i}`;
         tr.dataset.index = i;
-        tr.style.animationDelay = `${i * 0.04}s`;
         tr.classList.add('unified-row', 'selected');
+        tr.style.animationDelay = `${i * 0.04}s`;
+
         tr.innerHTML = `
             <td class="col-check">
                 <label class="checkbox-wrapper">
@@ -447,41 +951,38 @@ function renderRequirementsForSelection(reqs) {
                     <span class="checkmark"></span>
                 </label>
             </td>
-            <td class="col-req">
-                <div class="td-requirement">${escapeHtml(req)}</div>
-            </td>
-            <td class="col-status">
-                <span class="status-chip pending">Pending</span>
-            </td>
-            <td class="col-complexity"><span class="cell-pending">—</span></td>
-            <td class="col-agent-type" style="display:none;"><span class="cell-pending">—</span></td>
+            <td class="col-req"><div class="td-requirement" onclick="toggleReqExpand(${i})">${escapeHtml(req)}</div></td>
+            <td class="col-status"><span class="status-chip pending">Pending</span></td>
+            <td class="col-complexity"><span class="cell-pending">\u2014</span></td>
+            <td class="col-agent-type" style="display:none;"><span class="cell-pending">\u2014</span></td>
         `;
-        // Create hidden expandable detail row
+
         const detailTr = document.createElement('tr');
         detailTr.id = `unified-detail-${i}`;
         detailTr.className = 'row-details-expandable';
         detailTr.innerHTML = `
             <td colspan="5">
                 <div class="detail-grid">
-                    <div class="detail-item">
+                    <div class="detail-item" data-field="currentState">
                         <span class="detail-label">Current State</span>
-                        <span class="detail-value" data-field="currentState">—</span>
+                        <span class="detail-value">\u2014</span>
                     </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Gap</span>
-                        <span class="detail-value" data-field="gap">—</span>
+                    <div class="detail-item" data-field="gap">
+                        <span class="detail-label">Gap Analysis</span>
+                        <span class="detail-value">\u2014</span>
                     </div>
-                    <div class="detail-item">
-                        <span class="detail-label">Est. Effort</span>
-                        <span class="detail-value" data-field="effort">—</span>
+                    <div class="detail-item" data-field="effort">
+                        <span class="detail-label">Estimated Effort</span>
+                        <span class="detail-value">\u2014</span>
                     </div>
-                    <div class="detail-item detail-item-full" style="display:none;">
+                    <div class="detail-item detail-item-full" data-field="details" style="display:none;">
                         <span class="detail-label">Implementation Details</span>
-                        <span class="detail-value" data-field="details"></span>
+                        <span class="detail-value"></span>
                     </div>
                 </div>
             </td>
         `;
+
         tbody.appendChild(tr);
         tbody.appendChild(detailTr);
     });
@@ -492,6 +993,17 @@ function renderRequirementsForSelection(reqs) {
     document.getElementById('tableActions').style.animation = 'fadeSlideIn 0.4s var(--ease-out)';
     document.getElementById('selectAll').checked = true;
     updateAnalyzeCount();
+}
+
+function toggleReqExpand(index) {
+    const detailRow = document.getElementById(`unified-detail-${index}`);
+    const row = document.getElementById(`unified-row-${index}`);
+    if (!detailRow) return;
+    detailRow.classList.toggle('show');
+    if (row) {
+        const reqDiv = row.querySelector('.td-requirement');
+        if (reqDiv) reqDiv.classList.toggle('expanded');
+    }
 }
 
 function updateAnalyzeCount() {
@@ -524,6 +1036,11 @@ async function startGapAnalysis() {
     btn.innerHTML = `<div class="loading-step-icon spinner" style="width:16px;height:16px;border-width:2px;"></div> Analyzer processing ${selectedIndices.length}...`;
     setStatus('Analyzer Running...', 'processing');
     setActiveAgent('analyzer');
+    // Update loop state — Analyze stage starting
+    updateLoopState({
+        activeStage: 'analyze',
+        stages: { analyze: { status: 'active', startTime: Date.now(), metrics: { primary: `0/${selectedIndices.length} analyzed`, secondary: '', statusText: 'Analyzer Running' } } }
+    });
 
     // Mark selected rows as "Queued", non-selected as "Skipped"
     document.querySelectorAll('.unified-row').forEach((row, i) => {
@@ -586,6 +1103,7 @@ async function startGapAnalysis() {
                     gap.hasGap = !isNoGap(gap);
                     gaps.push(gap);
                     gapAnalyzedCount++;
+                    updateLoopState({ stages: { analyze: { metrics: { primary: `${gapAnalyzedCount}/${selectedIndices.length} analyzed` } } } });
                     enrichRowWithGap(gap);
                     document.getElementById('gapAnalyzedCount').textContent = gapAnalyzedCount;
                     // Update QA table in real-time if QA panel is open
@@ -609,6 +1127,14 @@ async function startGapAnalysis() {
         const noGapCount = gaps.length - actionableGaps;
         setStep(2);
         setStatus(`${actionableGaps} Gaps / ${noGapCount} Met`, '');
+
+    // Advance loop state: Analyze complete, Build waiting
+    updateLoopState({
+        stages: {
+            analyze: { status: 'complete', endTime: Date.now(), metrics: { primary: `${actionableGaps} gaps / ${noGapCount} met`, statusText: 'Complete ✓' } },
+            build: { status: 'waiting', metrics: { primary: 'Select & Dispatch', statusText: 'Waiting...' } },
+        }
+    });
 
         // Switch from "Analyze Gaps" to "Create Issues" button
         document.getElementById('btnAnalyzeGaps').style.display = 'none';
@@ -672,10 +1198,11 @@ async function analyzeSkipped() {
     // Mark skipped rows as queued
     skippedIndices.forEach(i => {
         const row = document.getElementById(`unified-row-${i}`);
-        if (!row) return;
-        const statusCell = row.querySelector('.col-status');
-        statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Queued</span>`;
-        row.classList.remove('no-gap-row');
+        if (row) {
+            const statusCell = row.querySelector('.col-status');
+            statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Queued</span>`;
+            row.classList.remove('no-gap-row');
+        }
     });
 
     try {
@@ -763,27 +1290,30 @@ async function analyzeSkipped() {
 function markRowAnalyzing(gapId) {
     const idx = gapId - 1;
     const row = document.getElementById(`unified-row-${idx}`);
-    if (!row) return;
-
-    const statusCell = row.querySelector('.col-status');
-    if (statusCell) {
-        statusCell.innerHTML = `
-            <span class="status-chip analyzing active">
-                <span class="status-chip-dot"></span>
-                Analyzing
-            </span>
-        `;
+    if (row) {
+        const statusCell = row.querySelector('.col-status');
+        if (statusCell) {
+            statusCell.innerHTML = `
+                <span class="status-chip analyzing active">
+                    <span class="status-chip-dot"></span>
+                    Analyzing
+                </span>
+            `;
+        }
     }
 }
 
 // ─── Enrich a row when gap data arrives ──────────────────────────────────────
 
 function enrichRowWithGap(gap) {
+    const idx = gap.id - 1;
+    const noGap = !gap.hasGap;
+
+    // ─── Update the table row ─────────────────────────────────────────────
     const tbody = document.getElementById('unifiedTableBody');
     const rows = tbody.querySelectorAll('.unified-row');
     let targetRow = null;
 
-    const idx = gap.id - 1;
     if (idx >= 0 && idx < rows.length) {
         targetRow = rows[idx];
     }
@@ -801,55 +1331,53 @@ function enrichRowWithGap(gap) {
     if (!targetRow) return;
 
     const cells = targetRow.querySelectorAll('td');
-    const noGap = !gap.hasGap;
     const rowIdx = targetRow.dataset.index;
     const detailRow = document.getElementById(`unified-detail-${rowIdx}`);
 
     if (noGap) {
-        // Mark as "No Gap" — requirement already met
         cells[2].innerHTML = `<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> No Gap</span>`;
-        cells[3].innerHTML = `<span class="text-muted">—</span>`;
+        cells[3].innerHTML = `<span class="text-muted">\u2014</span>`;
         cells[3].style.textAlign = 'center';
         cells[4].style.display = 'none';
         targetRow.classList.add('no-gap-row');
+        // Disable checkbox for no-gap rows
+        const cb = targetRow.querySelector('input[type="checkbox"]');
+        if (cb) { cb.checked = false; cb.disabled = true; }
     } else {
         cells[2].innerHTML = `<span class="status-chip analyzed"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg> Gap Found</span>`;
         cells[3].innerHTML = `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${gap.complexity}</span>`;
         cells[3].style.textAlign = 'center';
     }
 
-    // Populate expandable detail row
-    if (detailRow) {
-        const csVal = detailRow.querySelector('[data-field="currentState"]');
-        const gapVal = detailRow.querySelector('[data-field="gap"]');
-        const effVal = detailRow.querySelector('[data-field="effort"]');
-        const detVal = detailRow.querySelector('[data-field="details"]');
-        if (csVal) csVal.innerHTML = escapeHtml(gap.currentState) || '—';
-        if (gapVal) gapVal.innerHTML = escapeHtml(gap.gap) || '—';
-        if (effVal) effVal.textContent = gap.estimatedEffort || '—';
-        if (detVal && gap.details) {
-            detVal.innerHTML = escapeHtml(gap.details);
-            detVal.closest('.detail-item').style.display = '';
-        }
-        if (noGap) {
-            detailRow.classList.add('no-gap-detail');
-        }
-    }
-
     targetRow.dataset.details = gap.details || '';
     targetRow.dataset.gapId = gap.id;
     targetRow.dataset.hasGap = gap.hasGap ? '1' : '0';
+    targetRow.classList.add('row-enriched');
 
-    // Make requirement clickable to expand details
-    const reqDiv = cells[1].querySelector('.td-requirement');
-    if (reqDiv) {
-        reqDiv.onclick = () => toggleExpandableDetail(targetRow);
-        reqDiv.classList.add('expandable-req');
+    // ─── Populate the detail expansion row ────────────────────────────────
+    if (detailRow) {
+        const grid = detailRow.querySelector('.detail-grid');
+        if (grid) {
+            const csVal = grid.querySelector('[data-field="currentState"] .detail-value');
+            const gapVal = grid.querySelector('[data-field="gap"] .detail-value');
+            const effVal = grid.querySelector('[data-field="effort"] .detail-value');
+            const detItem = grid.querySelector('[data-field="details"]');
+            const detVal = detItem ? detItem.querySelector('.detail-value') : null;
+            if (csVal) csVal.textContent = gap.currentState || '\u2014';
+            if (gapVal) gapVal.textContent = gap.gap || '\u2014';
+            if (effVal) effVal.textContent = gap.estimatedEffort || '\u2014';
+            if (detVal && gap.details) {
+                detVal.textContent = gap.details;
+                if (detItem) detItem.style.display = '';
+            }
+        }
     }
 
-    targetRow.classList.add('row-enriched');
-    setTimeout(() => targetRow.classList.remove('row-enriched'), 1200);
+    // Flash animation on the row
+    targetRow.classList.add('row-flash');
+    setTimeout(() => targetRow.classList.remove('row-flash'), 1200);
 }
+
 
 // ─── Reveal checkboxes after analysis completes ──────────────────────────────
 
@@ -921,19 +1449,17 @@ function escapeHtml(text) {
 // ─── Checkbox Handling (dual-phase) ───────────────────────────────────────────
 function handleCheckboxChange(index) {
     if (analysisPhase === 'selecting') {
-        // Phase 1: selecting which requirements to analyze
-        const checkbox = document.querySelector(`input[data-gap-index="${index}"]`);
-        const row = checkbox.closest('tr');
-        row.classList.toggle('selected', checkbox.checked);
+        const row = document.getElementById(`unified-row-${index}`);
+        const checkbox = row ? row.querySelector('input[type="checkbox"]') : document.querySelector(`input[data-gap-index="${index}"]`);
+        if (row) row.classList.toggle('selected', checkbox.checked);
         updateAnalyzeCount();
     } else if (analysisPhase === 'reviewed') {
-        // Phase 2: selecting which gaps to create issues for
         const gap = gaps.find(g => g.id === index + 1);
         if (gap && gap.hasGap) {
-            const checkbox = document.querySelector(`input[data-gap-index="${index}"]`);
+            const row = document.getElementById(`unified-row-${index}`);
+            const checkbox = row ? row.querySelector('input[type="checkbox"]') : document.querySelector(`input[data-gap-index="${index}"]`);
             gap.selected = checkbox.checked;
-            const row = checkbox.closest('tr');
-            row.classList.toggle('selected', checkbox.checked);
+            if (row) row.classList.toggle('selected', checkbox.checked);
         }
         updateSelectedCount();
     }
@@ -970,18 +1496,17 @@ function handleSelectAll() {
 
 function toggleAllCheckboxes() {
     if (analysisPhase === 'selecting') {
-        // Toggle all requirements
         const all = document.querySelectorAll('.unified-row input[type="checkbox"]:not(:disabled)');
         const anyChecked = Array.from(all).some(cb => cb.checked);
         const newState = !anyChecked;
         all.forEach(cb => {
             cb.checked = newState;
-            cb.closest('tr').classList.toggle('selected', newState);
+            const row = cb.closest('tr');
+            if (row) row.classList.toggle('selected', newState);
         });
         document.getElementById('selectAll').checked = newState;
         updateAnalyzeCount();
     } else {
-        // Toggle gap-found rows for issue creation
         const actionable = gaps.filter(g => g.hasGap);
         const anySelected = actionable.some(g => g.selected);
         const newState = !anySelected;
@@ -1061,6 +1586,11 @@ async function dispatchSelected() {
     setStatus('Builder Dispatching...', 'processing');
     setStep(3);
     setActiveAgent('builder');
+    // Update loop state — Build stage starting
+    updateLoopState({
+        activeStage: 'build',
+        stages: { build: { status: 'active', startTime: Date.now(), metrics: { primary: `0/${selectedGaps.length} dispatched`, statusText: 'Dispatching...' } } }
+    });
     dispatchInProgress = true;
     dispatchTotalItems = selectedGaps.length;
     dispatchCompletedItems = 0;
@@ -1151,6 +1681,13 @@ async function dispatchSelected() {
 
         // Show actions bar with remaining count
         updateDispatchCounts();
+        // Advance loop state: Build complete, Verify waiting
+        updateLoopState({
+            stages: {
+                build: { status: 'complete', endTime: Date.now(), metrics: { primary: `${allResults.length} dispatched`, statusText: 'Complete ✓' } },
+                verify: { status: 'waiting', metrics: { primary: 'Ship & Validate', statusText: 'Waiting...' } },
+            }
+        });
         document.getElementById('dispatchActions').style.display = 'flex';
 
     } catch (error) {
@@ -1751,6 +2288,141 @@ function renderCompletion(results) {
     }
 }
 
+// ─── Stage Detail — Slide-Over (TASK 5 + TASK 6 Content Migration + TASK 7 Dual-Render) ─────
+// Track which panel is currently re-parented into the slide-over
+let _slideOverSourcePanelId = null;
+
+// Stage → source panel mapping
+const STAGE_PANEL_MAP = {
+    meet: 'panel-loading',
+    analyze: 'panel-loading',
+    build: 'panel-issues',
+    verify: 'panel-qa',
+};
+
+function openStageDetail(stage) {
+    // Only allow opening if the stage is not idle
+    const stageData = loopState.stages[stage];
+    if (!stageData || stageData.status === 'idle') {
+        showToast("This stage hasn't started yet", 'info');
+        return;
+    }
+
+    // If another detail is already open, close it first (moves content back)
+    if (_slideOverSourcePanelId) {
+        _returnPanelToMain();
+    }
+
+    // Update loop state
+    loopState.detailPanelOpen = stage;
+
+    // Set slide-over title
+    const titles = { meet: 'Meet', analyze: 'Analyze', build: 'Build', verify: 'Verify' };
+    const titleEl = document.getElementById('slideOverTitle');
+    if (titleEl) titleEl.textContent = titles[stage] || stage;
+
+    // Determine source panel
+    const sourcePanelId = STAGE_PANEL_MAP[stage];
+    const sourcePanel = document.getElementById(sourcePanelId);
+    if (!sourcePanel) return;
+
+    // ── Re-parent: move actual panel into slide-over ──
+    const slideOverContent = document.getElementById('slideOverContent');
+    slideOverContent.innerHTML = ''; // Clear any leftover content
+
+    // Remember where to put it back
+    _slideOverSourcePanelId = sourcePanelId;
+
+    // Move the real panel element into the slide-over
+    slideOverContent.appendChild(sourcePanel);
+
+    // Make it visible inside the slide-over (override the panel system)
+    sourcePanel.classList.add('in-slideover');
+    sourcePanel.style.display = 'flex';
+    sourcePanel.style.animation = 'none';
+    sourcePanel.style.position = 'relative';
+    sourcePanel.style.opacity = '1';
+    sourcePanel.style.pointerEvents = 'auto';
+
+    // Activate backdrop + slide-over
+    document.getElementById('slideOverBackdrop').classList.add('active');
+    document.getElementById('slideOver').classList.add('active');
+
+    // Dim the loop container
+    const loopContainer = document.querySelector('.loop-container');
+    if (loopContainer) loopContainer.classList.add('dimmed');
+
+    // Mark the clicked stage node as selected
+    document.querySelectorAll('.stage-node').forEach(n => n.classList.remove('stage-node--selected'));
+    const selectedNode = document.querySelector(`.stage-node--${stage}`);
+    if (selectedNode) selectedNode.classList.add('stage-node--selected');
+
+    // Focus management
+    const slideOver = document.getElementById('slideOver');
+    const focusableEls = slideOver.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focusableEls.length > 0) {
+        focusableEls[0].focus();
+    }
+
+    renderLoopNodes();
+}
+
+function closeStageDetail() {
+    // Move panel content back to <main> first
+    _returnPanelToMain();
+
+    // Remove active classes
+    document.getElementById('slideOverBackdrop').classList.remove('active');
+    document.getElementById('slideOver').classList.remove('active');
+
+    // Restore loop container opacity
+    const loopContainer = document.querySelector('.loop-container');
+    if (loopContainer) loopContainer.classList.remove('dimmed');
+
+    // Deselect stage node
+    document.querySelectorAll('.stage-node').forEach(n => n.classList.remove('stage-node--selected'));
+
+    // Update loop state
+    loopState.detailPanelOpen = null;
+
+    renderLoopNodes();
+}
+
+/**
+ * Move the re-parented panel back to <main class="main-content"> in its original position.
+ * This is critical so that the panel system continues to work normally.
+ */
+function _returnPanelToMain() {
+    if (!_slideOverSourcePanelId) return;
+
+    const panel = document.getElementById(_slideOverSourcePanelId);
+    if (!panel) { _slideOverSourcePanelId = null; return; }
+
+    const main = document.querySelector('main.main-content');
+    if (!main) { _slideOverSourcePanelId = null; return; }
+
+    // Remove slide-over overrides
+    panel.classList.remove('in-slideover');
+    panel.style.display = '';
+    panel.style.animation = '';
+    panel.style.position = '';
+    panel.style.opacity = '';
+    panel.style.pointerEvents = '';
+
+    // Append back to main (panels are found by ID so order doesn't technically matter,
+    // but let's put it back in a reasonable position)
+    main.appendChild(panel);
+
+    _slideOverSourcePanelId = null;
+}
+
+// Escape key closes slide-over
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && loopState.detailPanelOpen) {
+        closeStageDetail();
+    }
+});
+
 // ─── Reset ────────────────────────────────────────────────────────────────────
 function resetApp() {
     gaps = [];
@@ -1772,6 +2444,7 @@ function resetApp() {
     setStep(1);
     setStatus('Ready', '');
     showPanel('panel-analyze');
+    showLoopHeader(false);
     const meetingInput = document.getElementById('meetingNameInput');
     document.getElementById('btnAnalyze').disabled = !(meetingInput && meetingInput.value.trim());
     // Reset agent column visibility
@@ -1782,6 +2455,15 @@ function resetApp() {
     if (qaUrlBar) qaUrlBar.style.display = 'none';
     const qaProgress = document.getElementById('qaWorkflowProgress');
     if (qaProgress) qaProgress.style.display = 'none';
+    // Reset loop state
+    loopState.meetingName = '';
+    loopState.iteration = 1;
+    loopState.activeStage = null;
+    loopState.detailPanelOpen = null;
+    Object.keys(loopState.stages).forEach(s => {
+        loopState.stages[s] = { status: 'idle', metrics: {}, startTime: null, endTime: null };
+    });
+    renderLoopNodes();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1934,6 +2616,11 @@ async function launchQAWorkflow() {
     setQAStep('deploy');
     validationResults = [];
     qaWorkflowRunning = true;
+    // Update loop state — Verify stage starting
+    updateLoopState({
+        activeStage: 'verify',
+        stages: { verify: { status: 'active', startTime: Date.now(), metrics: { primary: 'Deploying...', statusText: 'Deployer Running' } } }
+    });
 
     const progressEl = document.getElementById('qaWorkflowProgress');
     progressEl.style.display = '';
@@ -1962,6 +2649,7 @@ async function launchQAWorkflow() {
         if (!deployUrl) throw new Error('Deployment did not return a URL');
 
         deployedUrl = deployUrl;
+        updateLoopState({ stages: { verify: { metrics: { primary: 'Validating...', secondary: deployUrl, statusText: 'Validator Running' } } } });
         showDeployUrl(deployUrl);
 
         wfDeploy.classList.remove('active');
@@ -1978,9 +2666,15 @@ async function launchQAWorkflow() {
         wfValidate.classList.remove('active');
         finishValidationUI(wfValidate);
         setQAStep('complete');
+        const passed = validationResults.filter(v => v.passed).length;
+        const failed = validationResults.length - passed;
+        updateLoopState({
+            stages: { verify: { status: 'complete', endTime: Date.now(), metrics: { primary: `${passed} pass / ${failed} fail`, statusText: failed > 0 ? 'Issues Found' : 'All Passed ✓' } } }
+        });
     } catch (error) {
         showToast(error.message);
         setStatus('Workflow Failed', 'error');
+        updateLoopState({ stages: { verify: { status: 'error', metrics: { statusText: 'Failed' } } } });
         if (!wfDeploy.classList.contains('done')) {
             wfDeploy.classList.remove('active');
             wfDeploy.classList.add('failed');
@@ -2363,6 +3057,46 @@ function updateQATableRowWithValidation(result) {
         }
     }
     document.getElementById('qaGapSummary').textContent = summaryParts.join(' \u00b7 ');
+}
+
+// ─── Loop Navigation ──────────────────────────────────────────────────────────
+function navigateToLanding() {
+    // If a workflow is in progress, confirm before leaving
+    if (loopState && loopState.activeStage && analysisPhase !== 'idle') {
+        if (!confirm('A workflow is in progress. Return to landing?')) return;
+    }
+    showLoopHeader(false);
+    resetApp();
+}
+
+function returnToLoop() {
+    // If a slide-over is open, close it first
+    if (typeof closeStageDetail === 'function') {
+        closeStageDetail();
+    }
+    showPanel('panel-loop');
+}
+
+function showLoopHeader(show) {
+    const phaseNav = document.getElementById('phaseNav');
+    const loopInfo = document.getElementById('loopHeaderInfo');
+    const newMeetingBtn = document.getElementById('btnNewMeeting');
+    const statusBadge = document.getElementById('statusBadge');
+    if (show) {
+        if (phaseNav) phaseNav.style.display = 'none';
+        if (loopInfo) {
+            loopInfo.style.display = 'flex';
+            document.getElementById('loopMeetingName').textContent = loopState.meetingName || 'Meeting';
+            document.getElementById('iterationBadge').textContent = `⟳ Iteration #${loopState.iteration || 1}`;
+        }
+        if (newMeetingBtn) newMeetingBtn.style.display = '';
+        if (statusBadge) statusBadge.style.display = 'none';
+    } else {
+        if (phaseNav) phaseNav.style.display = 'flex';
+        if (loopInfo) loopInfo.style.display = 'none';
+        if (newMeetingBtn) newMeetingBtn.style.display = 'none';
+        if (statusBadge) statusBadge.style.display = '';
+    }
 }
 
 // ─── Clickable Phase Navigation ────────────────────────────────────────────────

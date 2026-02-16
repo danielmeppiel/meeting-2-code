@@ -22,7 +22,7 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-left">
-                <div class="logo" onclick="showPanel('panel-analyze')" style="cursor:pointer;">
+                <div class="logo" onclick="navigateToLanding()" style="cursor:pointer;">
                     <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>
                     </svg>
@@ -47,12 +47,21 @@
                         <span class="phase-tab-label">Verify</span>
                     </button>
                 </nav>
+                <!-- Loop info (shown when in loop/pipeline view) -->
+                <div class="loop-header-info" id="loopHeaderInfo" style="display:none;">
+                    <span class="loop-meeting-name" id="loopMeetingName" onclick="returnToLoop()"></span>
+                    <span class="iteration-badge" id="iterationBadge">⟳ Iteration #1</span>
+                </div>
             </div>
             <div class="header-right">
                 <div class="status-badge" id="statusBadge">
                     <span class="status-dot"></span>
                     <span class="status-text">Ready</span>
                 </div>
+                <button class="btn btn-ghost btn-sm" id="btnNewMeeting" onclick="resetApp()" style="display:none;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                    New Meeting
+                </button>
             </div>
         </header>
 
@@ -138,79 +147,254 @@
                 </div>
             </section>
 
-            <!-- Live Analysis View → becomes the unified analysis + review panel -->
+            <!-- Infinite Loop Control Pane -->
+            <section class="panel" id="panel-loop">
+                <div class="loop-container">
+                    <svg class="loop-svg" viewBox="0 0 1000 500">
+                        <defs>
+                            <!-- Main gradient that flows around the loop -->
+                            <linearGradient id="loopGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#3b82f6" />
+                                <stop offset="25%" stop-color="#f59e0b" />
+                                <stop offset="50%" stop-color="#10b981" />
+                                <stop offset="75%" stop-color="#8b5cf6" />
+                                <stop offset="100%" stop-color="#3b82f6" />
+                            </linearGradient>
+
+                            <!-- Animated flowing gradient -->
+                            <linearGradient id="loopGradientAnimated" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="1000" y2="0">
+                                <stop offset="0%" stop-color="#3b82f6">
+                                    <animate attributeName="stop-color" values="#3b82f6;#f59e0b;#10b981;#8b5cf6;#3b82f6" dur="6s" repeatCount="indefinite"/>
+                                </stop>
+                                <stop offset="25%" stop-color="#f59e0b">
+                                    <animate attributeName="stop-color" values="#f59e0b;#10b981;#8b5cf6;#3b82f6;#f59e0b" dur="6s" repeatCount="indefinite"/>
+                                </stop>
+                                <stop offset="50%" stop-color="#10b981">
+                                    <animate attributeName="stop-color" values="#10b981;#8b5cf6;#3b82f6;#f59e0b;#10b981" dur="6s" repeatCount="indefinite"/>
+                                </stop>
+                                <stop offset="75%" stop-color="#8b5cf6">
+                                    <animate attributeName="stop-color" values="#8b5cf6;#3b82f6;#f59e0b;#10b981;#8b5cf6" dur="6s" repeatCount="indefinite"/>
+                                </stop>
+                                <stop offset="100%" stop-color="#3b82f6">
+                                    <animate attributeName="stop-color" values="#3b82f6;#f59e0b;#10b981;#8b5cf6;#3b82f6" dur="6s" repeatCount="indefinite"/>
+                                </stop>
+                            </linearGradient>
+
+                            <!-- Glow filter -->
+                            <filter id="loopGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                <feGaussianBlur stdDeviation="8" result="blur1"/>
+                                <feGaussianBlur stdDeviation="16" result="blur2"/>
+                                <feMerge>
+                                    <feMergeNode in="blur2"/>
+                                    <feMergeNode in="blur1"/>
+                                </feMerge>
+                            </filter>
+
+                            <!-- Soft outer glow -->
+                            <filter id="loopSoftGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                <feGaussianBlur stdDeviation="24" result="blur"/>
+                                <feComposite in="blur" operator="over"/>
+                            </filter>
+
+                            <!-- Inner highlight filter -->
+                            <filter id="loopInnerGlow" x="-50%" y="-50%" width="200%" height="200%">
+                                <feGaussianBlur stdDeviation="3" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+
+                            <!-- Segment gradients for each stage area -->
+                            <linearGradient id="meetGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#3b82f6"/>
+                                <stop offset="100%" stop-color="#60a5fa"/>
+                            </linearGradient>
+                            <linearGradient id="analyzeGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#f59e0b"/>
+                                <stop offset="100%" stop-color="#fbbf24"/>
+                            </linearGradient>
+                            <linearGradient id="buildGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#10b981"/>
+                                <stop offset="100%" stop-color="#34d399"/>
+                            </linearGradient>
+                            <linearGradient id="verifyGrad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#8b5cf6"/>
+                                <stop offset="100%" stop-color="#a78bfa"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Layer 1: Wide soft ambient glow -->
+                        <path class="loop-path-ambient"
+                              d="M 500,250 C 500,80 80,80 80,250 C 80,420 500,420 500,250 C 500,80 920,80 920,250 C 920,420 500,420 500,250 Z" />
+
+                        <!-- Layer 2: Outer glow -->
+                        <path class="loop-path-glow"
+                              d="M 500,250 C 500,80 80,80 80,250 C 80,420 500,420 500,250 C 500,80 920,80 920,250 C 920,420 500,420 500,250 Z"
+                              filter="url(#loopGlow)" />
+
+                        <!-- Layer 3: Main thick path -->
+                        <path id="loop-path" class="loop-path"
+                              d="M 500,250 C 500,80 80,80 80,250 C 80,420 500,420 500,250 C 500,80 920,80 920,250 C 920,420 500,420 500,250 Z" />
+
+                        <!-- Layer 4: Animated energy flow (dashed overlay) -->
+                        <path class="loop-path-energy"
+                              d="M 500,250 C 500,80 80,80 80,250 C 80,420 500,420 500,250 C 500,80 920,80 920,250 C 920,420 500,420 500,250 Z" />
+
+                        <!-- Layer 5: Bright inner highlight -->
+                        <path class="loop-path-highlight"
+                              d="M 500,250 C 500,80 80,80 80,250 C 80,420 500,420 500,250 C 500,80 920,80 920,250 C 920,420 500,420 500,250 Z"
+                              filter="url(#loopInnerGlow)" />
+
+                        <!-- Center crossover glow point -->
+                        <circle class="loop-center-glow" cx="500" cy="250" r="8"/>
+
+                        <!-- Particles layer -->
+                        <g id="loopParticles"></g>
+                    </svg>
+
+                    <!-- Stage Node Cards -->
+                    <div class="stage-node stage-node--meet stage-node--idle" data-stage="meet" onclick="openStageDetail('meet')">
+                        <div class="stage-node-header">
+                            <span class="stage-node-icon">◉</span>
+                            <span class="stage-node-name">MEET</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-metrics">
+                            <span class="stage-node-metric" data-metric="primary">—</span>
+                            <span class="stage-node-metric" data-metric="secondary">—</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-status">
+                            <span class="stage-node-status-text">Idle</span>
+                        </div>
+                        <div class="stage-node-action" data-action="meet"></div>
+                    </div>
+
+                    <div class="stage-node stage-node--analyze stage-node--idle" data-stage="analyze" onclick="openStageDetail('analyze')">
+                        <div class="stage-node-header">
+                            <span class="stage-node-icon">◉</span>
+                            <span class="stage-node-name">ANALYZE</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-metrics">
+                            <span class="stage-node-metric" data-metric="primary">—</span>
+                            <span class="stage-node-metric" data-metric="secondary">—</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-status">
+                            <span class="stage-node-status-text">Idle</span>
+                        </div>
+                        <div class="stage-node-action" data-action="analyze"></div>
+                    </div>
+
+                    <div class="stage-node stage-node--build stage-node--idle" data-stage="build" onclick="openStageDetail('build')">
+                        <div class="stage-node-header">
+                            <span class="stage-node-icon">◉</span>
+                            <span class="stage-node-name">BUILD</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-metrics">
+                            <span class="stage-node-metric" data-metric="primary">—</span>
+                            <span class="stage-node-metric" data-metric="secondary">—</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-status">
+                            <span class="stage-node-status-text">Idle</span>
+                        </div>
+                        <div class="stage-node-action" data-action="build"></div>
+                    </div>
+
+                    <div class="stage-node stage-node--verify stage-node--idle" data-stage="verify" onclick="openStageDetail('verify')">
+                        <div class="stage-node-header">
+                            <span class="stage-node-icon">◉</span>
+                            <span class="stage-node-name">VERIFY</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-metrics">
+                            <span class="stage-node-metric" data-metric="primary">—</span>
+                            <span class="stage-node-metric" data-metric="secondary">—</span>
+                        </div>
+                        <div class="stage-node-divider"></div>
+                        <div class="stage-node-status">
+                            <span class="stage-node-status-text">Idle</span>
+                        </div>
+                        <div class="stage-node-action" data-action="verify"></div>
+                    </div>
+                </div>
+
+                    <!-- Agent Activity Feed -->
+                    <div class="activity-feed" id="activityFeed" onclick="toggleActivityFeed()">
+                        <div class="activity-feed-header">
+                            <span class="activity-feed-label">Agent Activity</span>
+                            <span class="activity-feed-toggle">▲</span>
+                        </div>
+                        <div class="activity-feed-entries" id="activityFeedEntries">
+                            <div class="activity-feed-entry">Waiting for activity...</div>
+                        </div>
+                    </div>
+            </section>
+
+            <!-- Live Analysis View — single-column progressive disclosure -->
             <section class="panel" id="panel-loading">
-                <div class="live-analysis">
-                    <!-- Left: Progress sidebar -->
-                    <div class="live-left">
-                        <div class="live-header">
-                            <div class="live-indicator">
-                                <span class="live-dot"></span>
-                                <span>Live Analysis</span>
-                            </div>
+                <div class="so-flow" id="liveRightPanel">
+
+                    <!-- 1. Compact Progress Strip -->
+                    <div class="so-progress">
+                        <div class="so-progress-header">
+                            <span class="live-dot"></span>
+                            <span class="so-progress-label">Live Analysis</span>
                             <span class="agent-badge agent-badge--extractor" id="activeAgentBadge">
                                 <span class="agent-avatar"><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="M365" style="width:16px;height:16px;object-fit:contain;"></span>
                                 <span class="agent-name">WorkIQ</span>
                                 <span class="agent-role">Requirements Agent</span>
                             </span>
                         </div>
-
-                        <!-- Progress Steps -->
-                        <div class="loading-steps" id="loadingSteps">
+                        <div class="so-steps" id="loadingSteps">
                             <div class="loading-step" id="ls-fetch">
                                 <div class="loading-step-icon"></div>
-                                <span>Connecting to M365</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
+                                <span class="so-step-label">M365</span>
                             </div>
+                            <div class="so-step-connector"></div>
                             <div class="loading-step" id="ls-extract">
                                 <div class="loading-step-icon"></div>
-                                <span>Fetching meeting data</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
+                                <span class="so-step-label">Fetch</span>
                             </div>
+                            <div class="so-step-connector"></div>
                             <div class="loading-step" id="ls-requirements">
                                 <div class="loading-step-icon"></div>
-                                <span>Extracting requirements</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
+                                <span class="so-step-label">Extract</span>
                             </div>
+                            <div class="so-step-connector"></div>
                             <div class="loading-step" id="ls-analyze">
                                 <div class="loading-step-icon"></div>
-                                <span>Creating epic issue</span>
-                                <span class="step-agent-tag" style="color: #818cf8;">WorkIQ</span>
+                                <span class="so-step-label">Epic</span>
                             </div>
-                            <div class="loading-step" id="ls-complexity">
-                                <div class="loading-step-icon"></div>
-                                <span>Analyzing selected gaps</span>
-                                <span class="step-agent-tag" style="color: #fbbf24;">Analyzer</span>
-                            </div>
-                        </div>
 
-                        <!-- Agent Log -->
-                        <div class="agent-log" id="agentLog">
-                            <div class="agent-log-entries" id="agentLogEntries"></div>
                         </div>
                     </div>
 
-                    <!-- Right: Meeting card + Unified table -->
-                    <div class="live-right" id="liveRightPanel">
-                        <!-- Office branding for meeting extraction (expandable) -->
-                        <div class="meeting-source-brand" id="meetingSourceBrand" style="display:none;" onclick="toggleMeetingBanner()">
-                            <div class="meeting-source-brand-header">
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="22" height="22">
-                                <span>Microsoft 365 Meeting</span>
-                                <svg class="meeting-brand-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                            </div>
-                            <div class="meeting-source-brand-details" id="meetingBrandDetails">
-                                <div class="meeting-detail-row" id="meetingDetailTitle"></div>
-                                <div class="meeting-detail-row" id="meetingDetailDate"></div>
-                                <div class="meeting-detail-row" id="meetingDetailParticipants"></div>
-                                <div class="meeting-detail-row" id="meetingDetailSummary"></div>
-                            </div>
+                    <!-- 2. Meeting Info (collapsible) -->
+                    <div class="meeting-source-brand" id="meetingSourceBrand" style="display:none;" onclick="toggleMeetingBanner()">
+                        <div class="meeting-source-brand-header">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="22" height="22">
+                            <span>Microsoft 365 Meeting</span>
+                            <svg class="meeting-brand-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                         </div>
-                        <!-- Meeting summary card (shown during Phase 1) -->
-                        <div class="meeting-card" id="meetingCard" style="display:none;">
-                            <div class="meeting-card-icon" id="meetingCardIcon">
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="48" height="48" style="object-fit: contain;" class="office-logo-img">
-                            </div>
+                        <div class="meeting-source-brand-details" id="meetingBrandDetails">
+                            <div class="meeting-detail-row" id="meetingDetailTitle"></div>
+                            <div class="meeting-detail-row" id="meetingDetailDate"></div>
+                            <div class="meeting-detail-row" id="meetingDetailParticipants"></div>
+                            <div class="meeting-detail-row" id="meetingDetailSummary"></div>
+                        </div>
+                    </div>
+
+                    <!-- Meeting card (shown during loading, hides after requirements load) -->
+                    <div class="meeting-card meeting-card--compact" id="meetingCard" style="display:none;">
+                        <div class="meeting-card-icon" id="meetingCardIcon">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/0c/Microsoft_Office_logo_%282013%E2%80%932019%29.svg/120px-Microsoft_Office_logo_%282013%E2%80%932019%29.svg.png" alt="Microsoft Office" width="36" height="36" style="object-fit: contain;" class="office-logo-img">
+                        </div>
+                        <div class="meeting-card-body">
                             <h3 class="meeting-card-title" id="meetingCardTitle">WorkIQ is connecting to M365...</h3>
                             <p class="meeting-card-date" id="meetingCardDate"></p>
                             <div class="meeting-card-agent" id="meetingCardAgent" style="display:none;">
@@ -226,13 +410,14 @@
                                 <span id="meetingCardStatus">WorkIQ is initializing...</span>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Unified table (evolves from requirements → gaps) -->
-                        <div id="unifiedTableContainer" style="display:none;">
-                        <div class="panel-header" style="margin-bottom: var(--space-md);">
+                    <!-- 3. Requirements & Gap Analysis (main content) -->
+                    <div id="unifiedTableContainer" style="display:none;">
+                        <div class="so-content-header">
                             <div>
-                                <h2 class="panel-title">Requirements & Gap Analysis</h2>
-                                <p class="panel-subtitle">
+                                <h3 class="so-content-title">Requirements & Gap Analysis</h3>
+                                <p class="so-content-sub">
                                     <span id="reqCount">0</span> requirements extracted &mdash;
                                     <span id="gapAnalyzedCount">0</span> analyzed
                                     <a id="epicLink" href="#" target="_blank" class="epic-link" style="display:none;">
@@ -241,32 +426,32 @@
                                     </a>
                                 </p>
                             </div>
-                            <div class="panel-actions" id="tableActions" style="display:none;">
-                                <button class="btn btn-ghost" onclick="toggleAllCheckboxes()">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
-                                    Toggle All
-                                </button>
-                                <button class="btn btn-primary" id="btnAnalyzeGaps" onclick="startGapAnalysis()">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                    Analyze Gaps for Selected
-                                    <span class="btn-badge" id="analyzeCount">0</span>
-                                </button>
-                                <button class="btn btn-ghost" id="btnAnalyzeSkipped" onclick="analyzeSkipped()" style="display:none;">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                                    Analyze Skipped
-                                    <span class="btn-badge" id="skippedCount">0</span>
-                                </button>
-                                <button class="btn btn-primary" id="btnCreateIssues" onclick="dispatchSelected()" style="display:none;" disabled>
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10a2 2 0 0 0-2-2h-2V6a4 4 0 0 0-4-4z"/>
-                                        <circle cx="12" cy="15" r="2"/>
-                                    </svg>
-                                    Dispatch Selected
-                                    <span class="btn-badge" id="selectedCount">0</span>
-                                </button>
-                            </div>
+                        </div>
+                        <div class="so-actions" id="tableActions" style="display:none;">
+                            <button class="btn btn-ghost btn-sm" onclick="toggleAllCheckboxes()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m9 12 2 2 4-4"/></svg>
+                                Toggle All
+                            </button>
+                            <button class="btn btn-primary btn-sm" id="btnAnalyzeGaps" onclick="startGapAnalysis()">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                Analyze Gaps
+                                <span class="btn-badge" id="analyzeCount">0</span>
+                            </button>
+                            <button class="btn btn-ghost btn-sm" id="btnAnalyzeSkipped" onclick="analyzeSkipped()" style="display:none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                                Skipped
+                                <span class="btn-badge" id="skippedCount">0</span>
+                            </button>
+                            <button class="btn btn-primary btn-sm" id="btnCreateIssues" onclick="dispatchSelected()" style="display:none;" disabled>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
+                                </svg>
+                                Dispatch
+                                <span class="btn-badge" id="selectedCount">0</span>
+                            </button>
                         </div>
 
+                        <!-- Requirements table -->
                         <div class="table-container">
                             <table class="gap-table" id="unifiedTable">
                                 <thead>
@@ -287,9 +472,18 @@
                             </table>
                         </div>
                     </div>
-                    <!-- end unifiedTableContainer -->
-                    </div>
-                    <!-- end live-right -->
+
+                    <!-- 4. Agent Activity (collapsed by default) -->
+                    <details class="so-log-section" id="agentLogSection">
+                        <summary class="so-log-toggle">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                            Agent Activity
+                        </summary>
+                        <div class="agent-log" id="agentLog">
+                            <div class="agent-log-entries" id="agentLogEntries"></div>
+                        </div>
+                    </details>
+
                 </div>
             </section>
 
@@ -473,6 +667,17 @@
 
         </main>
 
+        <!-- Slide-Over Detail Panel -->
+        <div class="slide-over-backdrop" id="slideOverBackdrop" onclick="closeStageDetail()"></div>
+        <aside class="slide-over" id="slideOver">
+            <div class="slide-over-header">
+                <button class="btn btn-ghost" onclick="closeStageDetail()">← Back to Loop</button>
+                <span class="slide-over-title" id="slideOverTitle"></span>
+            </div>
+            <div class="slide-over-content" id="slideOverContent">
+                <!-- Dynamic: content injected per stage -->
+            </div>
+        </aside>
 
     </div>
 
