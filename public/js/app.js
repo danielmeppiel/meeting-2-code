@@ -39,12 +39,14 @@ import {
     dispatchSelected, renderDispatchTable, renderBuildPreview, dispatchRemaining,
     finishDispatch, renderCompletion, getDispatchedGapIds, isDispatchInProgress,
     resetBuildFlow, handleBuildCheckboxChange, handleBuildSelectAll,
-    toggleBuildSelectAll, updateBuildSelectedCount,
+    toggleBuildSelectAll, updateBuildSelectedCount, toggleBuildRowExpand,
+    injectVerifyFailuresAsGaps,
 } from './build-flow.js';
 
 import {
     buildQAGapTable, launchQAWorkflow, runDeployOnly,
     runValidateOnly, toggleQAMode, getDeployedUrl, getValidationResults, isQAMode,
+    getFailedValidationGaps,
 } from './verify-flow.js';
 
 // ═════════════════════════════════════════════════════════════════
@@ -92,6 +94,22 @@ function navigateToBuild() {
 }
 
 /**
+ * Navigate to the VERIFY panel for deploy & validate.
+ * Opens the slide-over if in loop view, or switches panel in tab view.
+ */
+function navigateToVerify() {
+    try { buildQAGapTable(); } catch (_) {}
+    const detailOpen = store.get('detailPanelOpen');
+    if (detailOpen) {
+        // In slide-over mode: switch to verify detail
+        openStageDetail('verify');
+    } else {
+        // In tab mode: switch to verify panel
+        navigateToPhase('verify');
+    }
+}
+
+/**
  * Navigate back to the landing page. Confirms if a workflow is running.
  */
 function navigateToLanding() {
@@ -109,6 +127,50 @@ function navigateToLanding() {
 function returnToLoop() {
     closeStageDetail();
     showPanel('panel-loop');
+}
+
+// ═════════════════════════════════════════════════════════════════
+// Re-dispatch: Verify failures → Build
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * Take failed verification results, convert them to gap-like objects,
+ * inject them into the Build queue, bump the iteration counter,
+ * and navigate to the Build panel so the user can dispatch fixes.
+ */
+function redispatchFromVerify() {
+    const verifyGaps = getFailedValidationGaps();
+    if (verifyGaps.length === 0) {
+        showToast('No failed validations to re-dispatch.');
+        return;
+    }
+
+    // Inject verify failures into gaps array (preserves existing analyze gaps)
+    const injected = injectVerifyFailuresAsGaps(verifyGaps);
+
+    // Bump iteration counter
+    const currentIteration = store.get('meeting.iteration') || 1;
+    updateLoopState({
+        iteration: currentIteration + 1,
+        activeStage: 'build',
+        stages: {
+            build: { status: 'waiting', startTime: null, endTime: null, metrics: { primary: `${injected.length} fixes`, statusText: 'Waiting...' } },
+            verify: { status: 'error', metrics: { statusText: 'Re-dispatching...' } },
+        }
+    });
+
+    // Reset the build flow dispatch state so the queue renders fresh
+    resetBuildFlow();
+
+    appendLog('qaWorkflowLogEntries', `🔄 Re-dispatching ${injected.length} failed verification(s) to Build (Iteration #${currentIteration + 1})`);
+
+    // Navigate to build
+    const detailOpen = store.get('detailPanelOpen');
+    if (detailOpen) {
+        openStageDetail('build');
+    } else {
+        navigateToPhase('build');
+    }
 }
 
 /**
@@ -166,13 +228,17 @@ function resetApp() {
 eventBus.on(Events.PANEL_CHANGED, ({ panelId }) => {
     if (panelId === 'panel-issues') {
         renderBuildPreview();
+    } else if (panelId === 'panel-qa') {
+        try { buildQAGapTable(); } catch (_) {}
     }
 });
 
-// Also populate build preview when opening the build stage via slide-over
+// Also populate build preview / QA table when opening stages via slide-over
 eventBus.on(Events.STAGE_DETAIL_OPENED, ({ stage }) => {
     if (stage === 'build') {
         renderBuildPreview();
+    } else if (stage === 'verify') {
+        try { buildQAGapTable(); } catch (_) {}
     }
 });
 
@@ -217,11 +283,22 @@ eventBus.on('stage:render-action', ({ stage, stageData, actionArea }) => {
         btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg> Ship & Validate`;
         btn.onclick = (e) => {
             e.stopPropagation();
-            try { buildQAGapTable(); } catch (_) {}
-            showPanel('panel-qa');
-            launchQAWorkflow();
+            navigateToVerify();
         };
         actionArea.appendChild(btn);
+    } else if (stage === 'verify' && stageData.status === 'error') {
+        // Verification completed with test failures — offer re-dispatch to Build
+        const failedCount = (getValidationResults() || []).filter(v => !v.passed).length;
+        if (failedCount > 0) {
+            const btn = document.createElement('button');
+            btn.className = 'stage-node-action-btn stage-node-action-btn--fix pulse';
+            btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg> Fix & Rebuild ${failedCount}`;
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                redispatchFromVerify();
+            };
+            actionArea.appendChild(btn);
+        }
     }
 });
 
@@ -249,17 +326,20 @@ window.finishDispatch       = finishDispatch;
 window.handleBuildCheckboxChange = handleBuildCheckboxChange;
 window.handleBuildSelectAll = handleBuildSelectAll;
 window.toggleBuildSelectAll = toggleBuildSelectAll;
+window.toggleBuildRowExpand = toggleBuildRowExpand;
 
 // Verify
 window.launchQAWorkflow     = launchQAWorkflow;
 window.runDeployOnly        = runDeployOnly;
 window.runValidateOnly      = runValidateOnly;
 window.toggleQAMode         = toggleQAMode;
+window.redispatchFromVerify = redispatchFromVerify;
 
 // Navigation
 window.navigateToPhase      = navigateToPhase;
 window.navigateToLanding    = navigateToLanding;
 window.navigateToBuild      = navigateToBuild;
+window.navigateToVerify     = navigateToVerify;
 window.returnToLoop         = returnToLoop;
 window.resetApp             = resetApp;
 

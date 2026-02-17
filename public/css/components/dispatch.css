@@ -214,3 +214,74 @@
     font-style: italic;
 }
 
+/* ─── Build Detail (Expandable Rows) ───────────────────────────────────────── */
+.build-detail-expandable {
+    display: none;
+    background: var(--bg-tertiary);
+}
+
+.build-detail-expandable.show {
+    display: table-row;
+}
+
+.build-detail-expandable td {
+    padding: 0 16px 12px 16px;
+    border-top: none !important;
+}
+
+.build-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+    margin-top: 0;
+}
+
+.build-detail-grid--dispatch {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.build-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.build-detail-full {
+    grid-column: 1 / -1;
+}
+
+.build-detail-item .detail-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-tertiary);
+}
+
+.build-detail-item .detail-value {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+/* Queue mode: clickable requirement text cue */
+.dispatch-row .td-requirement {
+    cursor: pointer;
+}
+
+.dispatch-row .td-requirement::before {
+    content: '▸';
+    font-size: 0.7rem;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.dispatch-row .td-requirement.expanded::before {
+    transform: rotate(90deg);
+}
+

@@ -55,3 +55,22 @@
     border-radius: var(--radius-lg);
 }
 
+/* Fix & Rebuild — red-accented action button */
+.btn-fix {
+    background: rgba(239, 68, 68, 0.15);
+    color: rgb(239, 68, 68);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.15), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.btn-fix:hover {
+    background: rgba(239, 68, 68, 0.25);
+    border-color: rgba(239, 68, 68, 0.5);
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.25), 0 4px 16px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+}
+
+.btn-fix:active {
+    transform: translateY(0);
+}
+

@@ -10,6 +10,7 @@ import {
     updateLoopState, setStatus, setQAStep, appendLog, setActivePhase, showPanel
 } from './stage-controller.js';
 import { getGaps } from './analyze-flow.js';
+import { getDispatchedGapIds } from './build-flow.js';
 
 // ─── State ──────────────────────────────────────────────────────
 let validationResults = [];
@@ -26,6 +27,67 @@ export function getValidationResults() { return validationResults; }
 /** @returns {boolean} Whether QA mode is active. */
 export function isQAMode() { return qaMode; }
 
+// ─── Contextual QA button state ─────────────────────────────────
+/**
+ * Update the primary QA button to reflect the current state:
+ * - If there are failed validations → "Fix & Rebuild" (red, calls redispatch)
+ * - Otherwise → "Re-deploy & Validate" (blue, calls launchQAWorkflow)
+ */
+function updateQAButtonState() {
+    const btn = document.getElementById('btnLaunchQA');
+    if (!btn) return;
+    const failed = validationResults.filter(v => !v.passed).length;
+    if (failed > 0) {
+        btn.className = 'btn btn-fix btn-lg';
+        btn.onclick = () => { if (window.redispatchFromVerify) window.redispatchFromVerify(); };
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Fix &amp; Rebuild
+        `;
+    } else {
+        btn.className = 'btn btn-primary btn-lg';
+        btn.onclick = () => { launchQAWorkflow(); };
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            Re-deploy &amp; Validate
+        `;
+    }
+}
+
+// ─── Extract failed validations as gap-like objects ─────────────
+/**
+ * Convert failed validation results into gap-like objects that the Build
+ * flow can dispatch. Each object mirrors the shape produced by analyze-flow
+ * so the dispatch table, issue creation, and coding agents all work unchanged.
+ *
+ * @returns {Array} Gap-like objects for each failed validation.
+ */
+export function getFailedValidationGaps() {
+    const requirements = store.get('requirements') || [];
+    return validationResults
+        .filter(v => !v.passed)
+        .map((v, i) => {
+            const reqIndex = requirements.findIndex(r => r.trim() === v.requirement.trim());
+            return {
+                id: 9000 + i,  // High-range IDs to avoid collisions with analyze gaps
+                requirement: v.requirement,
+                gap: `Verification failed: ${v.details || 'Did not pass validation'}`,
+                details: v.details || '',
+                currentState: 'Deployed but failing validation',
+                complexity: 'Medium',
+                estimatedEffort: 'Fix required',
+                hasGap: true,
+                selected: true,
+                source: 'verify',               // Tag so we know this came from verify
+                requirementIndex: reqIndex >= 0 ? reqIndex : v.requirementIndex,
+            };
+        });
+}
+
 // ─── Build QA Gap Table ─────────────────────────────────────────
 /**
  * Render the QA requirements table with gap and validation status.
@@ -33,21 +95,31 @@ export function isQAMode() { return qaMode; }
 export function buildQAGapTable() {
     const gaps = getGaps();
     const requirements = store.get('requirements') || [];
+    const createdIssues = store.get('createdIssues') || [];
+    const dispatchedIds = getDispatchedGapIds();
     const tbody = document.getElementById('qaGapTableBody');
     tbody.innerHTML = '';
 
     const totalReqs = requirements.length;
     const gapCount = gaps.filter(g => g.hasGap).length;
     const metCount = gaps.filter(g => !g.hasGap).length;
+    const dispatchedCount = dispatchedIds.size;
 
     let summaryParts = [`${totalReqs} requirements`];
     if (gaps.length > 0) summaryParts.push(`${gapCount} gaps`);
     if (metCount > 0) summaryParts.push(`${metCount} met`);
+    if (dispatchedCount > 0) summaryParts.push(`${dispatchedCount} dispatched`);
     document.getElementById('qaGapSummary').textContent = summaryParts.join(' \u00b7 ');
 
     const validationMap = {};
     validationResults.forEach(v => {
         validationMap[v.requirement.trim()] = v;
+    });
+
+    // Build issue lookup: gapId → issue
+    const issueByGapId = {};
+    createdIssues.forEach(iss => {
+        if (iss.gapId) issueByGapId[iss.gapId] = iss;
     });
 
     requirements.forEach((req, i) => {
@@ -57,92 +129,142 @@ export function buildQAGapTable() {
 
         const gap = gaps.find(g => g.id === i + 1);
         const vr = validationMap[req.trim()];
+        const isDispatched = gap && dispatchedIds.has(gap.id);
+        const issue = gap ? issueByGapId[gap.id] : null;
 
-        let statusHtml = '';
+        // ── Resolution column: how was this requirement handled? ──
+        let resolutionHtml = '';
+        if (gap && !gap.hasGap) {
+            resolutionHtml = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Met</span>';
+        } else if (isDispatched) {
+            // Try to determine agent type from dispatch table DOM (if available)
+            const dispatchRow = document.getElementById(`dispatch-row-${gap.id}`);
+            const modeBadge = dispatchRow ? dispatchRow.querySelector('.dispatch-mode-badge') : null;
+            if (modeBadge && modeBadge.classList.contains('local')) {
+                resolutionHtml = '<span class="status-chip implemented"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Local Agent</span>';
+            } else if (modeBadge && modeBadge.classList.contains('developer')) {
+                resolutionHtml = '<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Developer</span>';
+            } else {
+                resolutionHtml = '<span class="status-chip assigned"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg> Cloud Agent</span>';
+            }
+        } else if (gap && gap.hasGap) {
+            resolutionHtml = '<span class="status-chip skipped">Not Dispatched</span>';
+        } else {
+            resolutionHtml = '<span class="status-chip pending">\u2014</span>';
+        }
 
+        // ── Validation column ──
+        let validationHtml = '';
         if (vr) {
             if (vr.passed) {
-                statusHtml = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Pass</span>';
+                validationHtml = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Pass</span>';
             } else {
-                statusHtml = '<span class="status-chip gap-found"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Fail</span>';
-            }
-        } else if (gap) {
-            if (gap.hasGap) {
-                statusHtml = '<span class="status-chip analyzed">Gap</span>';
-            } else {
-                statusHtml = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Met</span>';
+                validationHtml = '<span class="status-chip gap-found"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Fail</span>';
             }
         } else {
-            statusHtml = '<span class="status-chip pending">Pending</span>';
+            validationHtml = '<span class="status-chip pending">Pending</span>';
         }
 
         if (gap && !gap.hasGap && !vr) tr.classList.add('no-gap-row');
 
         tr.innerHTML = `
-            <td><div class="td-requirement">${escapeHtml(req)}</div></td>
-            <td>${statusHtml}</td>
+            <td class="col-req"><div class="td-requirement">${escapeHtml(req)}</div></td>
+            <td class="col-verify-resolution">${resolutionHtml}</td>
+            <td class="col-verify-validation">${validationHtml}</td>
         `;
         tbody.appendChild(tr);
 
-        // Build expandable detail row with gap/validation info
-        const hasDetail = (gap && (gap.gap || gap.details)) || vr;
-        if (hasDetail) {
-            const detailTr = document.createElement('tr');
-            detailTr.id = `qa-detail-${i}`;
-            detailTr.className = 'row-details-expandable';
+        // ── Expandable detail: full requirement journey ──
+        const detailTr = document.createElement('tr');
+        detailTr.id = `qa-detail-${i}`;
+        detailTr.className = 'build-detail-expandable';
 
-            let detailContent = '';
-            if (gap && gap.gap) {
-                detailContent += `
-                    <div class="detail-item">
-                        <span class="detail-label">Gap</span>
-                        <span class="detail-value">${escapeHtml(gap.gap)}</span>
-                    </div>`;
-            }
-            if (gap && gap.details) {
-                detailContent += `
-                    <div class="detail-item detail-item-full">
-                        <span class="detail-label">Implementation Details</span>
-                        <span class="detail-value">${escapeHtml(gap.details)}</span>
-                    </div>`;
-            }
-            if (vr) {
-                detailContent += `
-                    <div class="detail-item detail-item-full">
-                        <span class="detail-label">Validation Result</span>
-                        <span class="detail-value">${escapeHtml(vr.details || vr.evidence || vr.message || (vr.passed ? 'Passed' : 'Failed'))}</span>
-                    </div>`;
-            }
+        // Section 1: Analyze findings
+        const gapSummary = gap && gap.gap ? escapeHtml(gap.gap) : '\u2014';
+        const complexity = gap && gap.complexity ? `<span class="complexity-badge ${gap.complexity.toLowerCase()}">${escapeHtml(gap.complexity)}</span>` : '\u2014';
+        const effort = gap && gap.estimatedEffort ? escapeHtml(gap.estimatedEffort) : '\u2014';
 
-            detailTr.innerHTML = `
-                <td colspan="3">
-                    <div class="detail-grid" style="grid-template-columns: 1fr;">
-                        ${detailContent}
+        // Section 2: Build/dispatch info
+        let resolvedBy = '\u2014';
+        let issueLink = '\u2014';
+        if (isDispatched) {
+            const dispatchRow = document.getElementById(`dispatch-row-${gap.id}`);
+            const modeBadge = dispatchRow ? dispatchRow.querySelector('.dispatch-mode-badge') : null;
+            if (modeBadge && modeBadge.classList.contains('local')) resolvedBy = '\ud83d\udcbb Local Agent';
+            else if (modeBadge && modeBadge.classList.contains('developer')) resolvedBy = '\ud83d\udc64 Developer';
+            else resolvedBy = '\u2601\ufe0f Cloud Agent';
+        } else if (gap && !gap.hasGap) {
+            resolvedBy = 'Already met';
+        }
+        if (issue && issue.number > 0) {
+            issueLink = `<a href="${issue.url}" target="_blank" class="dispatch-issue-link">#${issue.number}</a>`;
+        }
+
+        // Section 3: Validation evidence
+        const evidence = vr
+            ? escapeHtml(vr.details || vr.evidence || vr.message || (vr.passed ? 'Passed' : 'Failed'))
+            : '<span class="text-muted">Not yet validated</span>';
+
+        detailTr.innerHTML = `
+            <td colspan="3">
+                <div class="verify-detail-grid">
+                    <div class="verify-detail-section">
+                        <div class="verify-detail-section-label">Analysis</div>
+                        <div class="verify-detail-row">
+                            <div class="build-detail-item">
+                                <span class="detail-label">Gap Summary</span>
+                                <span class="detail-value">${gapSummary}</span>
+                            </div>
+                            <div class="build-detail-item">
+                                <span class="detail-label">Complexity</span>
+                                <span class="detail-value">${complexity}</span>
+                            </div>
+                            <div class="build-detail-item">
+                                <span class="detail-label">Estimated Effort</span>
+                                <span class="detail-value">${effort}</span>
+                            </div>
+                        </div>
                     </div>
-                </td>
-            `;
-            tbody.appendChild(detailTr);
+                    <div class="verify-detail-section">
+                        <div class="verify-detail-section-label">Resolution</div>
+                        <div class="verify-detail-row">
+                            <div class="build-detail-item">
+                                <span class="detail-label">Resolved By</span>
+                                <span class="detail-value">${resolvedBy}</span>
+                            </div>
+                            <div class="build-detail-item">
+                                <span class="detail-label">Issue</span>
+                                <span class="detail-value">${issueLink}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="verify-detail-section" data-section="validation">
+                        <div class="verify-detail-section-label">Validation</div>
+                        <div class="verify-detail-row">
+                            <div class="build-detail-item build-detail-full">
+                                <span class="detail-label">Evidence</span>
+                                <span class="detail-value" data-field="evidence">${evidence}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(detailTr);
 
-            // Make requirement text clickable to toggle detail
-            const reqDiv = tr.querySelector('.td-requirement');
-            if (reqDiv) {
-                reqDiv.classList.add('expandable-req');
-                reqDiv.onclick = () => {
-                    detailTr.classList.toggle('show');
-                    reqDiv.classList.toggle('expanded');
-                };
-            }
+        // Make requirement text clickable
+        const reqDiv = tr.querySelector('.td-requirement');
+        if (reqDiv) {
+            reqDiv.onclick = () => {
+                detailTr.classList.toggle('show');
+                reqDiv.classList.toggle('expanded');
+            };
         }
     });
 
     const btn = document.getElementById('btnLaunchQA');
     if (deployedUrl && validationResults.length > 0) {
-        btn.innerHTML = `
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-            </svg>
-            Re-deploy &amp; Validate
-        `;
+        updateQAButtonState();
     }
 }
 
@@ -208,7 +330,7 @@ export async function launchQAWorkflow() {
         const passed = validationResults.filter(v => v.passed).length;
         const failed = validationResults.length - passed;
         updateLoopState({
-            stages: { verify: { status: 'complete', endTime: Date.now(), metrics: { primary: `${passed} pass / ${failed} fail`, statusText: failed > 0 ? 'Issues Found' : 'All Passed ✓' } } }
+            stages: { verify: { status: failed > 0 ? 'error' : 'complete', endTime: Date.now(), metrics: { primary: `${passed} pass / ${failed} fail`, statusText: failed > 0 ? 'Issues Found' : 'All Passed ✓' } } }
         });
     } catch (error) {
         showToast(error.message);
@@ -224,12 +346,7 @@ export async function launchQAWorkflow() {
     } finally {
         qaWorkflowRunning = false;
         btn.disabled = false;
-        btn.innerHTML = `
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-            </svg>
-            Re-deploy &amp; Validate
-        `;
+        updateQAButtonState();
     }
 }
 
@@ -284,12 +401,7 @@ export async function runDeployOnly() {
     } finally {
         qaWorkflowRunning = false;
         btn.disabled = false;
-        btn.innerHTML = `
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-            </svg>
-            Re-deploy &amp; Validate
-        `;
+        updateQAButtonState();
     }
 }
 
@@ -340,12 +452,7 @@ export async function runValidateOnly() {
     } finally {
         qaWorkflowRunning = false;
         btn.disabled = false;
-        btn.innerHTML = `
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-            </svg>
-            Re-deploy &amp; Validate
-        `;
+        updateQAButtonState();
     }
 }
 
@@ -530,10 +637,11 @@ export function setQATableRowValidating(reqIndex, requirement) {
     }
     if (!row) return;
 
-    const statusTd = row.querySelectorAll('td')[1];
-    if (!statusTd) return;
+    // Update the Validation column (3rd column, index 2)
+    const validationTd = row.querySelectorAll('td')[2];
+    if (!validationTd) return;
 
-    statusTd.innerHTML = '<span class="status-chip validating"><span class="validating-spinner"></span> Validating</span>';
+    validationTd.innerHTML = '<span class="status-chip validating"><span class="validating-spinner"></span> Validating</span>';
     row.classList.add('validating-row');
 }
 
@@ -559,55 +667,25 @@ export function updateQATableRowWithValidation(result) {
 
     row.classList.remove('validating-row');
 
-    const statusTd = row.querySelectorAll('td')[1];
+    // Update the Validation column (3rd column, index 2)
+    const validationTd = row.querySelectorAll('td')[2];
     if (result.passed) {
-        statusTd.innerHTML = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Pass</span>';
+        validationTd.innerHTML = '<span class="status-chip no-gap"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg> Pass</span>';
         row.classList.remove('no-gap-row');
         row.classList.add('validation-pass-row');
     } else {
-        statusTd.innerHTML = '<span class="status-chip gap-found"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Fail</span>';
+        validationTd.innerHTML = '<span class="status-chip gap-found"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg> Fail</span>';
         row.classList.remove('no-gap-row');
         row.classList.add('validation-fail-row');
     }
 
-    // Update or create the expandable detail row with validation evidence
-    let detailRow = document.getElementById(`qa-detail-${rowIdx}`);
+    // Update the expandable detail row's validation evidence section
+    const detailRow = document.getElementById(`qa-detail-${rowIdx}`);
     const evidence = result.details || result.evidence || result.message || (result.passed ? 'Passed' : 'Failed');
     if (detailRow) {
-        const grid = detailRow.querySelector('.detail-grid');
-        if (grid) {
-            grid.querySelectorAll('.detail-item-validation').forEach(el => el.remove());
-            const item = document.createElement('div');
-            item.className = 'detail-item detail-item-full detail-item-validation';
-            item.innerHTML = `
-                <span class="detail-label">Validation Result</span>
-                <span class="detail-value">${escapeHtml(evidence)}</span>
-            `;
-            grid.appendChild(item);
-        }
-    } else {
-        detailRow = document.createElement('tr');
-        detailRow.id = `qa-detail-${rowIdx}`;
-        detailRow.className = 'row-details-expandable';
-        detailRow.innerHTML = `
-            <td colspan="3">
-                <div class="detail-grid" style="grid-template-columns: 1fr;">
-                    <div class="detail-item detail-item-full detail-item-validation">
-                        <span class="detail-label">Validation Result</span>
-                        <span class="detail-value">${escapeHtml(evidence)}</span>
-                    </div>
-                </div>
-            </td>
-        `;
-        row.after(detailRow);
-
-        const reqDiv = row.querySelector('.td-requirement');
-        if (reqDiv && !reqDiv.classList.contains('expandable-req')) {
-            reqDiv.classList.add('expandable-req');
-            reqDiv.onclick = () => {
-                detailRow.classList.toggle('show');
-                reqDiv.classList.toggle('expanded');
-            };
+        const evidenceEl = detailRow.querySelector('[data-field="evidence"]');
+        if (evidenceEl) {
+            evidenceEl.textContent = evidence;
         }
     }
 

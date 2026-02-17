@@ -539,6 +539,12 @@
                             Dispatch Remaining
                             <span class="btn-badge" id="dispatchRemainingCount">0</span>
                         </button>
+                        <button class="btn btn-primary" id="btnNavigateVerify" onclick="navigateToVerify()" style="display:none;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                            Deploy &amp; Verify
+                        </button>
                         <button class="btn btn-ghost" id="btnFinishDispatch" onclick="finishDispatch()">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
                             Done
@@ -690,7 +696,8 @@
                             <thead>
                                 <tr>
                                     <th class="col-req">Requirement</th>
-                                    <th style="width:100px;">Status</th>
+                                    <th style="width:130px;">Resolution</th>
+                                    <th style="width:110px;">Validation</th>
                                 </tr>
                             </thead>
                             <tbody id="qaGapTableBody"></tbody>

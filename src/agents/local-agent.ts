@@ -50,9 +50,9 @@ async function ensureClone(log: (m: string) => void): Promise<void> {
     log("Local clone of corporate-website is up-to-date on main.");
 }
 
-/** Create a feature branch in the local clone. */
+/** Create a feature branch in the local clone (force-creates if it already exists). */
 async function createLocalBranch(branchName: string, log: (m: string) => void): Promise<void> {
-    await execAsync(`git checkout -b ${branchName}`, { cwd: REPO_PATH, timeout: 10_000 });
+    await execAsync(`git checkout -B ${branchName}`, { cwd: REPO_PATH, timeout: 10_000 });
     log(`Created local branch: ${branchName}`);
 }
 

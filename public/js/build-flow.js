@@ -7,9 +7,25 @@ import { store } from './store.js';
 import { escapeHtml } from './utils.js';
 import { showToast } from './toast.js';
 import {
-    updateLoopState, showPanel, setStatus, setActiveAgent, appendLog, setActivePhase
+    updateLoopState, showPanel, closeStageDetail, setStatus, setActiveAgent, appendLog, setActivePhase
 } from './stage-controller.js';
-import { getGaps } from './analyze-flow.js';
+import { getGaps, setGaps } from './analyze-flow.js';
+
+// ─── Build row expand ───────────────────────────────────────────
+/**
+ * Toggle the expandable detail row for a dispatch/build queue row.
+ * @param {number} gapId - Gap ID.
+ */
+export function toggleBuildRowExpand(gapId) {
+    const detailRow = document.getElementById(`dispatch-detail-${gapId}`);
+    const mainRow = document.getElementById(`dispatch-row-${gapId}`);
+    if (!detailRow) return;
+    detailRow.classList.toggle('show');
+    if (mainRow) {
+        const reqDiv = mainRow.querySelector('.td-requirement');
+        if (reqDiv) reqDiv.classList.toggle('expanded');
+    }
+}
 
 // ─── Dispatch state ─────────────────────────────────────────────
 let dispatchedGapIds = new Set();
@@ -29,6 +45,44 @@ export function resetBuildFlow() {
     dispatchInProgress = false;
     dispatchTotalItems = 0;
     dispatchCompletedItems = 0;
+}
+
+// ─── Inject verify failures as dispatchable gaps ─────────────────
+/**
+ * Merge failed verification results (shaped as gap objects) into the
+ * existing gaps array so they appear in the Build queue.
+ *
+ * Already-existing analyze gaps are preserved (including gaps from
+ * additional "Analyze Skipped" runs). Only verification failures that
+ * don't duplicate an existing gap requirement are added.
+ *
+ * Resets dispatch tracking for re-dispatched items so the queue
+ * treats them as fresh work.
+ *
+ * @param {Array} verifyGaps - Gap-like objects from getFailedValidationGaps().
+ */
+export function injectVerifyFailuresAsGaps(verifyGaps) {
+    const gaps = getGaps();
+
+    // Remove any previous verify-sourced gaps (from an earlier iteration)
+    const filtered = gaps.filter(g => g.source !== 'verify');
+
+    // Track which requirements already have a gap from analysis
+    const existingReqs = new Set(filtered.filter(g => g.hasGap).map(g => g.requirement.trim()));
+
+    // Only add verify failures for requirements that aren't already an active gap
+    const newGaps = verifyGaps.filter(vg => !existingReqs.has(vg.requirement.trim()));
+
+    // Append verify failures
+    const merged = [...filtered, ...newGaps];
+
+    // Replace the gaps array
+    setGaps(merged);
+
+    // Clear dispatch tracking for the verify-failure IDs so they show as "Ready"
+    newGaps.forEach(g => dispatchedGapIds.delete(g.id));
+
+    return newGaps;
 }
 
 // ─── Build Queue (interactive pre-dispatch table) ───────────────
@@ -77,7 +131,7 @@ export function renderBuildPreview() {
                     <span class="checkmark"></span>
                 </label>
             </td>
-            <td class="col-req"><div class="td-requirement">${escapeHtml(gap.requirement)}</div></td>
+            <td class="col-req"><div class="td-requirement" onclick="toggleBuildRowExpand(${gap.id})">${escapeHtml(gap.requirement)}</div></td>
             <td class="col-dispatch-mode">
                 <select class="agent-type-select" data-gap-id="${gap.id}">
                     <option value="local" selected>💻 Local Agent</option>
@@ -88,7 +142,40 @@ export function renderBuildPreview() {
             <td class="col-dispatch-issue" id="dispatch-issue-${gap.id}"><span class="text-muted">—</span></td>
             <td class="col-dispatch-status" id="dispatch-status-${gap.id}"><span class="status-chip pending">Ready</span></td>
         `;
+
+        // Expandable detail row (pre-dispatch: gap summary, complexity, effort)
+        const detailTr = document.createElement('tr');
+        detailTr.id = `dispatch-detail-${gap.id}`;
+        detailTr.className = 'build-detail-expandable';
+        const gapSummary = gap.gap || '—';
+        const complexity = gap.complexity || '—';
+        const effort = gap.estimatedEffort || '—';
+        const details = gap.details || '';
+        detailTr.innerHTML = `
+            <td colspan="6">
+                <div class="build-detail-grid">
+                    <div class="build-detail-item">
+                        <span class="detail-label">Gap Summary</span>
+                        <span class="detail-value">${escapeHtml(gapSummary)}</span>
+                    </div>
+                    <div class="build-detail-item">
+                        <span class="detail-label">Complexity</span>
+                        <span class="detail-value"><span class="complexity-badge ${complexity.toLowerCase()}">${escapeHtml(complexity)}</span></span>
+                    </div>
+                    <div class="build-detail-item">
+                        <span class="detail-label">Estimated Effort</span>
+                        <span class="detail-value">${escapeHtml(effort)}</span>
+                    </div>
+                    ${details ? `<div class="build-detail-item build-detail-full">
+                        <span class="detail-label">Implementation Details</span>
+                        <span class="detail-value">${escapeHtml(details)}</span>
+                    </div>` : ''}
+                </div>
+            </td>
+        `;
+
         tbody.appendChild(tr);
+        tbody.appendChild(detailTr);
     });
 
     // Update header counts
@@ -261,11 +348,16 @@ export async function dispatchSelected() {
     dispatchTotalItems = selectedGaps.length;
     dispatchCompletedItems = 0;
     const fillEl = document.getElementById('dispatchProgressFill');
-    fillEl.style.width = '0%';
+    fillEl.style.width = '3%';
     fillEl.classList.remove('done');
 
     // Build and show the dispatch table on first dispatch
-    showPanel('panel-issues');
+    // Only switch main panel if NOT already inside the build slide-over,
+    // otherwise showPanel removes .active from panel-loop and kills the loop.
+    const detailOpen = store.get('detailPanelOpen');
+    if (detailOpen !== 'build') {
+        showPanel('panel-issues');
+    }
     renderDispatchTable(selectedGaps, cloudGaps, localGaps, developerGaps);
     document.getElementById('issueLogEntries').innerHTML = '';
 
@@ -354,6 +446,10 @@ export async function dispatchSelected() {
             }
         });
         document.getElementById('dispatchActions').style.display = 'flex';
+
+        // Show "Deploy & Verify" button when all items dispatched
+        const btnVerify = document.getElementById('btnNavigateVerify');
+        if (btnVerify) btnVerify.style.display = '';
 
     } catch (error) {
         showToast(error.message);
@@ -462,12 +558,47 @@ export function renderDispatchTable(selectedGaps, cloudGaps, localGaps, develope
         }
 
         tr.innerHTML = `
-            <td class="col-req"><div class="td-requirement">${escapeHtml(gap.requirement)}</div></td>
+            <td class="col-req"><div class="td-requirement" onclick="toggleBuildRowExpand(${gap.id})">${escapeHtml(gap.requirement)}</div></td>
             <td class="col-dispatch-mode">${modeBadge}</td>
             <td class="col-dispatch-issue" id="dispatch-issue-${gap.id}">${issueCell}</td>
             <td class="col-dispatch-status" id="dispatch-status-${gap.id}">${statusCell}</td>
         `;
+
+        // Expandable detail row (post-dispatch: dispatch-relevant details)
+        const detailTr = document.createElement('tr');
+        detailTr.id = `dispatch-detail-${gap.id}`;
+        detailTr.className = 'build-detail-expandable';
+
+        const agentLabel = isCloud ? '☁️ Cloud Agent' : isLocal ? '💻 Local Agent' : isDeveloper ? '👤 Developer' : '—';
+        const gapSummary = gap.gap || '—';
+        const effort = gap.estimatedEffort || '—';
+        const statusLabel = wasDispatched ? 'Dispatched' : isDispatching ? 'In Progress' : 'Queued';
+
+        detailTr.innerHTML = `
+            <td colspan="5">
+                <div class="build-detail-grid build-detail-grid--dispatch">
+                    <div class="build-detail-item">
+                        <span class="detail-label">Agent</span>
+                        <span class="detail-value">${agentLabel}</span>
+                    </div>
+                    <div class="build-detail-item">
+                        <span class="detail-label">Estimated Effort</span>
+                        <span class="detail-value">${escapeHtml(effort)}</span>
+                    </div>
+                    <div class="build-detail-item">
+                        <span class="detail-label">Dispatch Status</span>
+                        <span class="detail-value">${statusLabel}</span>
+                    </div>
+                    <div class="build-detail-item build-detail-full">
+                        <span class="detail-label">Gap Summary</span>
+                        <span class="detail-value">${escapeHtml(gapSummary)}</span>
+                    </div>
+                </div>
+            </td>
+        `;
+
         tbody.appendChild(tr);
+        tbody.appendChild(detailTr);
     });
 
     updateDispatchCounts();
@@ -484,6 +615,15 @@ export function updateDispatchRowIssue(gapId, issue) {
     if (issueCell) {
         issueCell.innerHTML = `<a href="${issue.url}" target="_blank" class="dispatch-issue-link">#${issue.number}</a>`;
     }
+    // Also update issue link in detail row if it exists
+    const detailRow = document.getElementById(`dispatch-detail-${gapId}`);
+    if (detailRow) {
+        const issueItem = detailRow.querySelector('[data-field="issue"]');
+        if (issueItem) {
+            const val = issueItem.querySelector('.detail-value');
+            if (val) val.innerHTML = `<a href="${issue.url}" target="_blank" class="dispatch-issue-link">#${issue.number}</a>`;
+        }
+    }
 }
 
 /**
@@ -496,6 +636,16 @@ export function updateDispatchRowStatus(gapId, status, extra) {
     const statusCell = document.getElementById(`dispatch-status-${gapId}`);
     const row = document.getElementById(`dispatch-row-${gapId}`);
     if (!statusCell) return;
+
+    // Update detail row dispatch status if it exists
+    const detailRow = document.getElementById(`dispatch-detail-${gapId}`);
+    if (detailRow) {
+        const statusItem = detailRow.querySelector('.build-detail-grid .build-detail-item:nth-child(3) .detail-value');
+        if (statusItem) {
+            const labelMap = { assigning: 'Assigning…', assigned: 'Assigned ✓', completed: 'Completed ✓', implemented: 'Implemented ✓', working: 'Working…', failed: 'Failed ✗' };
+            statusItem.textContent = labelMap[status] || status;
+        }
+    }
 
     if (status === 'assigning') {
         statusCell.innerHTML = `<span class="status-chip analyzing"><span class="status-chip-dot"></span> Assigning</span>`;
@@ -542,7 +692,12 @@ export function updateDispatchCounts() {
 
     const percent = allActionable.length > 0 ? (dispatched / allActionable.length) * 100 : 0;
     const fillUpd = document.getElementById('dispatchProgressFill');
-    fillUpd.style.width = `${percent}%`;
+    // Don't reset to 0% during active dispatch — keep shimmer visible
+    if (percent > 0 || !dispatchInProgress) {
+        fillUpd.style.width = `${percent}%`;
+    } else if (dispatchInProgress && parseFloat(fillUpd.style.width) === 0) {
+        fillUpd.style.width = '3%';
+    }
     if (percent >= 100) fillUpd.classList.add('done');
 }
 
@@ -637,6 +792,12 @@ export function finishDispatch() {
         assigned: true,
     }));
     renderCompletion(results);
+
+    // Close the slide-over first so panel-loop stays visible during transition
+    const detailOpen = store.get('detailPanelOpen');
+    if (detailOpen) {
+        closeStageDetail();
+    }
     showPanel('panel-complete');
 }
 

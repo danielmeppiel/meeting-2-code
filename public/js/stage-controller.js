@@ -89,7 +89,7 @@ export function renderLoopNodes() {
 
         const stageData = stages[stage];
 
-        card.classList.remove('stage-node--idle', 'stage-node--waiting', 'stage-node--active', 'stage-node--complete', 'stage-node--error');
+        card.classList.remove('stage-node--idle', 'stage-node--waiting', 'stage-node--active', 'stage-node--complete', 'stage-node--warning', 'stage-node--error');
         card.classList.add(`stage-node--${stageData.status}`);
 
         const primaryMetric = card.querySelector('[data-metric="primary"]');
@@ -99,13 +99,13 @@ export function renderLoopNodes() {
 
         const statusText = card.querySelector('.stage-node-status-text');
         if (statusText) {
-            const statusLabels = { idle: 'Idle', waiting: 'Waiting...', active: 'In Progress', complete: 'Complete ✓', error: 'Error' };
+            const statusLabels = { idle: 'Idle', waiting: 'Waiting...', active: 'In Progress', complete: 'Complete ✓', warning: 'Issues Found', error: 'Issues Found' };
             statusText.textContent = stageData.metrics.statusText || statusLabels[stageData.status] || 'Idle';
         }
 
         const icon = card.querySelector('.stage-node-icon');
         if (icon) {
-            const icons = { idle: '◉', waiting: '◉', active: '⟳', complete: '✓', error: '✗' };
+            const icons = { idle: '◉', waiting: '◉', active: '⟳', complete: '✓', warning: '⚠', error: '✗' };
             icon.textContent = icons[stageData.status] || '◉';
         }
 

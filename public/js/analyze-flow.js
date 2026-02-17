@@ -173,11 +173,17 @@ function getSkippedIndices() {
 
 function showAnalyzeSkippedButton() {
     const skippedIndices = getSkippedIndices();
+    const checkedCount = skippedIndices.filter(i => {
+        const row = document.getElementById(`unified-row-${i}`);
+        const cb = row ? row.querySelector('input[type="checkbox"]') : null;
+        return cb && cb.checked;
+    }).length;
     const btn = document.getElementById('btnAnalyzeSkipped');
     if (!btn) return;
     if (skippedIndices.length > 0) {
         btn.style.display = '';
-        document.getElementById('skippedCount').textContent = skippedIndices.length;
+        document.getElementById('skippedCount').textContent = checkedCount;
+        btn.disabled = checkedCount === 0;
     } else {
         btn.style.display = 'none';
     }
@@ -187,9 +193,13 @@ function showAnalyzeSkippedButton() {
  * Analyse requirements that were previously skipped.
  */
 export async function analyzeSkipped() {
-    const skippedIndices = getSkippedIndices();
+    const skippedIndices = getSkippedIndices().filter(i => {
+        const row = document.getElementById(`unified-row-${i}`);
+        const cb = row ? row.querySelector('input[type="checkbox"]') : null;
+        return cb && cb.checked;
+    });
     if (skippedIndices.length === 0) {
-        showToast('No skipped requirements to analyze.');
+        showToast('Please select at least one skipped requirement to analyze.');
         return;
     }
 
@@ -364,20 +374,23 @@ export function enrichRowWithGap(gap) {
 
 // ─── Post-analysis: make table read-only, show dispatch nav ─────
 function revealCheckboxesForIssues() {
-    // After analysis, the analyze table becomes read-only.
+    // After analysis, keep checkboxes visible for skipped rows
+    // so users can select which ones to analyze next.
     // Dispatch selection (checkboxes + agent dropdowns) lives in BUILD.
 
-    // Hide checkbox column — no longer needed in analyze view
-    document.getElementById('colCheckHeader').style.display = 'none';
-    document.querySelectorAll('.unified-row .col-check').forEach(td => td.style.display = 'none');
-
-    // Disable all checkboxes
-    document.querySelectorAll('.unified-row input[type="checkbox"]').forEach(cb => {
-        cb.disabled = true;
+    document.querySelectorAll('.unified-row').forEach(row => {
+        const cb = row.querySelector('input[type="checkbox"]');
+        if (!cb) return;
+        const statusChip = row.querySelector('.col-status .status-chip');
+        const isSkipped = statusChip && statusChip.textContent.trim() === 'Skipped';
+        if (isSkipped) {
+            cb.disabled = false;
+            cb.checked = true;
+        } else {
+            cb.disabled = true;
+            cb.checked = false;
+        }
     });
-
-    // Agent column stays hidden (dispatch agents are selected in BUILD)
-    // colAgentHeader stays display:none
 
     // Pre-select actionable gaps for dispatch (BUILD will read this)
     gaps.forEach(g => { g.selected = g.hasGap; });
@@ -411,10 +424,21 @@ export function handleCheckboxChange(index) {
         if (row && checkbox) row.classList.toggle('selected', checkbox.checked);
         updateAnalyzeCount();
     } else if (phase === 'reviewed') {
+        const row = document.getElementById(`unified-row-${index}`);
+        const checkbox = row ? row.querySelector('input[type="checkbox"]') : null;
+
+        // Handle skipped rows (selecting requirements for re-analysis)
+        const statusChip = row ? row.querySelector('.col-status .status-chip') : null;
+        const isSkipped = statusChip && statusChip.textContent.trim() === 'Skipped';
+        if (isSkipped) {
+            if (row && checkbox) row.classList.toggle('selected', checkbox.checked);
+            showAnalyzeSkippedButton();
+            return;
+        }
+
+        // Handle analyzed gap rows (for dispatch selection)
         const gap = gaps.find(g => g.id === index + 1);
         if (gap && gap.hasGap) {
-            const row = document.getElementById(`unified-row-${index}`);
-            const checkbox = row ? row.querySelector('input[type="checkbox"]') : null;
             if (checkbox) gap.selected = checkbox.checked;
             if (row && checkbox) row.classList.toggle('selected', checkbox.checked);
         }
@@ -440,16 +464,18 @@ export function handleSelectAll() {
         });
         updateAnalyzeCount();
     } else {
-        gaps.forEach(g => { if (g.hasGap) g.selected = checked; });
+        // Toggle skipped rows for re-analysis
         document.querySelectorAll('.unified-row').forEach(row => {
-            if (row.dataset.hasGap === '0') return;
             const cb = row.querySelector('input[type="checkbox"]');
-            if (cb) {
+            if (!cb || cb.disabled) return;
+            const statusChip = row.querySelector('.col-status .status-chip');
+            const isSkipped = statusChip && statusChip.textContent.trim() === 'Skipped';
+            if (isSkipped) {
                 cb.checked = checked;
                 row.classList.toggle('selected', checked);
             }
         });
-        updateSelectedCount();
+        showAnalyzeSkippedButton();
     }
 }
 
@@ -470,20 +496,29 @@ export function toggleAllCheckboxes() {
         document.getElementById('selectAll').checked = newState;
         updateAnalyzeCount();
     } else {
-        const actionable = gaps.filter(g => g.hasGap);
-        const anySelected = actionable.some(g => g.selected);
-        const newState = !anySelected;
-        gaps.forEach(g => { if (g.hasGap) g.selected = newState; });
+        // Toggle skipped rows for re-analysis selection
+        const skippedRows = [];
         document.querySelectorAll('.unified-row').forEach(row => {
-            if (row.dataset.hasGap === '0') return;
-            const cb = row.querySelector('input[type="checkbox"]');
-            if (cb) {
-                cb.checked = newState;
-                row.classList.toggle('selected', newState);
+            const statusChip = row.querySelector('.col-status .status-chip');
+            if (statusChip && statusChip.textContent.trim() === 'Skipped') {
+                skippedRows.push(row);
             }
         });
-        document.getElementById('selectAll').checked = newState;
-        updateSelectedCount();
+        if (skippedRows.length > 0) {
+            const anyChecked = skippedRows.some(r => {
+                const cb = r.querySelector('input[type="checkbox"]');
+                return cb && cb.checked;
+            });
+            const newState = !anyChecked;
+            skippedRows.forEach(r => {
+                const cb = r.querySelector('input[type="checkbox"]');
+                if (cb) {
+                    cb.checked = newState;
+                    r.classList.toggle('selected', newState);
+                }
+            });
+            showAnalyzeSkippedButton();
+        }
     }
 }
 

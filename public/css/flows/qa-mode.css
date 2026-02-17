@@ -248,6 +248,75 @@
     color: #f87171;
 }
 
+.status-chip.validating {
+    background: rgba(168, 85, 247, 0.12);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.25);
+    animation: analyzing-glow 2s ease-in-out infinite;
+}
+.validating-spinner {
+    width: 10px; height: 10px;
+    border: 2px solid rgba(168, 85, 247, 0.3);
+    border-top-color: #c084fc;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.status-chip.implemented {
+    background: rgba(6, 182, 212, 0.12);
+    color: rgb(34, 211, 238);
+    border: 1px solid rgba(6, 182, 212, 0.25);
+}
+
+/* ─── Verify Detail Grid (Full Journey) ─────────────────────────────── */
+.verify-detail-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+    overflow: hidden;
+}
+
+.verify-detail-section {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-subtle);
+}
+.verify-detail-section:last-child {
+    border-bottom: none;
+}
+
+.verify-detail-section-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+    opacity: 0.7;
+}
+
+.verify-detail-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+}
+
+.verify-detail-row:has(> :nth-child(2):last-child) {
+    grid-template-columns: 1fr 1fr;
+}
+
+.verify-detail-row:has(> :first-child:last-child) {
+    grid-template-columns: 1fr;
+}
+
+/* Verify table column widths */
+.col-verify-resolution { text-align: center; }
+.col-verify-validation { text-align: center; }
+
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(10px); }
     to   { opacity: 1; transform: translateY(0); }
