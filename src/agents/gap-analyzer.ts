@@ -1,7 +1,6 @@
 import type { CopilotClient, MCPLocalServerConfig, MCPRemoteServerConfig } from "@github/copilot-sdk";
 import { createAgentSession } from "./session-helpers.js";
-
-const REPO_PATH = `/Users/${process.env.USER || "danielmeppiel"}/Repos/corporate-website`;
+import { REPO_PATH } from "../config.js";
 
 export interface GapItem {
     id: number;

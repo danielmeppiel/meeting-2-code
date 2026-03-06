@@ -8,6 +8,12 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white)
 ![Copilot SDK](https://img.shields.io/badge/Copilot_SDK-0.1.23-000?logo=github&logoColor=white)
 
+## Summary
+
+Meeting → Code automates the path from meeting decisions to shipped code. It connects to Microsoft 365 via the WorkIQ MCP server to extract actionable requirements from any meeting, then uses the GitHub MCP server through the Copilot SDK to perform gap analysis against a target repository's codebase. Identified gaps become detailed GitHub Issues — complete with descriptions, acceptance criteria, and effort estimates — created via the GitHub CLI. The user reviews and selects which gaps to act on, then dispatches the Copilot coding agent (`copilot-swe-agent`) to autonomously implement changes and open pull requests. An optional deploy-and-validate stage uses Azure Developer CLI and Playwright to verify the implementation against the original requirements. The entire pipeline streams progress to the browser in real time via Server-Sent Events, with human oversight at every decision point.
+
+> 📖 Full documentation: [docs/README.md](docs/README.md) — problem→solution, prerequisites, setup, deployment, architecture diagram, and Responsible AI notes.
+
 ---
 
 ## What It Does
@@ -89,11 +95,14 @@ Open **http://localhost:3000** in your browser.
 
 ### Changing the Target Repository
 
-The target repo is configured in the agent files. Update the `OWNER` and `REPO` constants in:
+Set environment variables before starting the server:
 
-- [`src/agents/github-issues.ts`](src/agents/github-issues.ts)
-- [`src/agents/coding-agent.ts`](src/agents/coding-agent.ts)
-- The codebase analysis prompt in [`src/agents/gap-analyzer.ts`](src/agents/gap-analyzer.ts)
+```bash
+export TARGET_OWNER="your-github-username"
+export TARGET_REPO="your-repo-name"
+export TARGET_REPO_PATH="/path/to/local/clone"   # only needed for local agent mode
+npm start
+```
 
 ## How It Works
 

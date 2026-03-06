@@ -3,8 +3,7 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
-const OWNER = "danielmeppiel";
-const REPO = "corporate-website";
+import { OWNER, REPO } from "../config.js";
 
 interface AssignResult {
     issueNumber: number;

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "workiq": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "@microsoft/workiq", "mcp"],
+      "tools": ["*"],
+      "timeout": 180000
+    },
+    "github": {
+      "type": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "tools": ["*"]
+    }
+  }
+}
