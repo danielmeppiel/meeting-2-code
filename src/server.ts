@@ -11,6 +11,8 @@ import { assignCodingAgent } from "./agents/coding-agent.js";
 import { deployToAzure, resetCorpWebsiteRepo } from "./agents/azure-deployer.js";
 import { validateDeployment } from "./agents/playwright-validator.js";
 import { executeLocalAgent } from "./agents/local-agent.js";
+import { resolveRepo } from "./config.js";
+import type { RepoTarget } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +30,7 @@ let lastAnalysis: GapItem[] = [];
 let epicIssueNumber = 0;
 let epicIssueUrl = "";
 let createdIssues: Array<{ id: number; title: string; number: number; url: string }> = [];
+let lastRepoTarget: RepoTarget = resolveRepo();
 
 // ─── MCP Server configs ──────────────────────────────────────────────────────
 function getWorkIQMcpConfig(): Record<string, MCPLocalServerConfig | MCPRemoteServerConfig> {
@@ -69,6 +72,8 @@ function sseHeaders(res: express.Response) {
 app.get("/api/analyze", async (req, res) => {
     const sendEvent = sseHeaders(res);
     const meetingName = (req.query.meeting as string) || "Contoso Industries Redesign";
+    const targetRepoParam = req.query.repo as string | undefined;
+    lastRepoTarget = resolveRepo(targetRepoParam);
 
     try {
         const result = await extractMeetingRequirements(client, {
@@ -94,6 +99,8 @@ app.get("/api/analyze", async (req, res) => {
             result.info,
             result.requirements,
             (msg) => sendEvent("log", { message: msg }),
+            lastRepoTarget.owner,
+            lastRepoTarget.repo,
         );
         epicIssueNumber = epic.number;
         epicIssueUrl = epic.url;
@@ -113,7 +120,8 @@ app.get("/api/analyze", async (req, res) => {
 
 // Step 1b: Analyze gaps for selected requirements (SSE via POST)
 app.post("/api/analyze-gaps", async (req, res) => {
-    const { selectedIndices } = req.body as { selectedIndices: number[] };
+    const { selectedIndices, targetRepo } = req.body as { selectedIndices: number[]; targetRepo?: string };
+    if (targetRepo) lastRepoTarget = resolveRepo(targetRepo);
 
     const selectedReqs = (selectedIndices || [])
         .filter((i: number) => i >= 0 && i < lastRequirements.length)
@@ -129,6 +137,9 @@ app.post("/api/analyze-gaps", async (req, res) => {
         const analysis = await analyzeSelectedGaps(client, {
             requirements: selectedReqs,
             githubMcp: getGitHubMcpConfig(),
+            owner: lastRepoTarget.owner,
+            repo: lastRepoTarget.repo,
+            repoPath: lastRepoTarget.repoPath,
             onProgress: (step, message) => sendEvent("progress", { step, message }),
             onGapStarted: (id) => sendEvent("gap-started", { id }),
             onGap: (gap) => sendEvent("gap", { gap }),
@@ -156,7 +167,8 @@ app.post("/api/analyze-gaps", async (req, res) => {
 
 // Step 2: Create GitHub issues for selected gaps (SSE streaming)
 app.post("/api/create-issues", async (req, res) => {
-    const { selectedIds } = req.body as { selectedIds: number[] };
+    const { selectedIds, targetRepo } = req.body as { selectedIds: number[]; targetRepo?: string };
+    if (targetRepo) lastRepoTarget = resolveRepo(targetRepo);
     const selectedGaps = lastAnalysis.filter((g) => selectedIds.includes(g.id));
 
     if (selectedGaps.length === 0) {
@@ -169,6 +181,8 @@ app.post("/api/create-issues", async (req, res) => {
         const issues = await createGithubIssues({
             gaps: selectedGaps,
             epicIssueNumber: epicIssueNumber > 0 ? epicIssueNumber : undefined,
+            owner: lastRepoTarget.owner,
+            repo: lastRepoTarget.repo,
             onProgress: (current, total, message) => sendEvent("progress", { current, total, message }),
             onIssueCreated: (issue) => sendEvent("issue", { issue }),
             onLog: (message) => sendEvent("log", { message }),
@@ -179,7 +193,7 @@ app.post("/api/create-issues", async (req, res) => {
         // Link sub-issues to epic
         if (epicIssueNumber > 0) {
             const subNums = issues.filter(i => i.number > 0).map(i => i.number);
-            await linkSubIssuesToEpic(epicIssueNumber, subNums, (msg) => sendEvent("log", { message: msg }));
+            await linkSubIssuesToEpic(epicIssueNumber, subNums, (msg) => sendEvent("log", { message: msg }), lastRepoTarget.owner, lastRepoTarget.repo);
         }
 
         sendEvent("complete", { success: true, total: issues.length });
@@ -196,7 +210,8 @@ app.post("/api/create-issues", async (req, res) => {
 
 // Step 3: Assign coding agent to issues (SSE streaming)
 app.post("/api/assign-coding-agent", async (req, res) => {
-    const { issueNumbers } = req.body as { issueNumbers: number[] };
+    const { issueNumbers, targetRepo } = req.body as { issueNumbers: number[]; targetRepo?: string };
+    if (targetRepo) lastRepoTarget = resolveRepo(targetRepo);
 
     if (!issueNumbers?.length) {
         return res.status(400).json({ success: false, error: "No issues provided" });
@@ -207,6 +222,8 @@ app.post("/api/assign-coding-agent", async (req, res) => {
     try {
         const results = await assignCodingAgent({
             issueNumbers,
+            owner: lastRepoTarget.owner,
+            repo: lastRepoTarget.repo,
             onProgress: (current, total, message) => sendEvent("progress", { current, total, message }),
             onResult: (result) => sendEvent("result", { result }),
             onLog: (message) => sendEvent("log", { message }),
@@ -308,7 +325,8 @@ app.post("/api/validate", async (req, res) => {
 
 // Step 3b: Execute local Copilot agent for selected gaps (SSE streaming)
 app.post("/api/execute-local-agent", async (req, res) => {
-    const { gapIds } = req.body as { gapIds: number[] };
+    const { gapIds, targetRepo } = req.body as { gapIds: number[]; targetRepo?: string };
+    if (targetRepo) lastRepoTarget = resolveRepo(targetRepo);
 
     console.log("[execute-local-agent] Received gapIds:", JSON.stringify(gapIds));
 
@@ -337,6 +355,10 @@ app.post("/api/execute-local-agent", async (req, res) => {
         const results = await executeLocalAgent(client, {
             gaps: selectedGaps,
             githubMcp: getGitHubMcpConfig(),
+            owner: lastRepoTarget.owner,
+            repo: lastRepoTarget.repo,
+            repoUrl: lastRepoTarget.repoUrl,
+            repoPath: lastRepoTarget.repoPath,
             onItemStart: (id, requirement) => sendEvent("item-start", { id, requirement }),
             onItemProgress: (id, message) => sendEvent("item-progress", { id, message }),
             onItemComplete: (id, success, summary) => sendEvent("item-complete", { id, success, summary }),

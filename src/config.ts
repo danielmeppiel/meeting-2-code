@@ -16,3 +16,35 @@ export const REPO_PATH =
 
 /** Remote clone URL */
 export const REPO_URL = `https://github.com/${OWNER}/${REPO}.git`;
+
+// ─── Per-request override ───────────────────────────────────────────────────
+
+export interface RepoTarget {
+    owner: string;
+    repo: string;
+    repoSlug: string;
+    repoPath: string;
+    repoUrl: string;
+}
+
+/**
+ * Parse a "owner/repo" string from the frontend, falling back to env/default config.
+ */
+export function resolveRepo(targetRepo?: string): RepoTarget {
+    let owner = OWNER;
+    let repo = REPO;
+
+    if (targetRepo && targetRepo.includes("/")) {
+        const parts = targetRepo.split("/");
+        owner = parts[0]!;
+        repo = parts.slice(1).join("/");
+    }
+
+    return {
+        owner,
+        repo,
+        repoSlug: `${owner}/${repo}`,
+        repoPath: process.env.TARGET_REPO_PATH || `/Users/${process.env.USER || "danielmeppiel"}/Repos/${repo}`,
+        repoUrl: `https://github.com/${owner}/${repo}.git`,
+    };
+}

@@ -26,6 +26,8 @@ interface CreatedIssue {
 interface CreateIssuesOptions {
     gaps: GapItem[];
     epicIssueNumber?: number;
+    owner?: string;
+    repo?: string;
     onProgress?: (current: number, total: number, message: string) => void;
     onIssueCreated?: (issue: CreatedIssue) => void;
     onLog?: (message: string) => void;
@@ -38,6 +40,8 @@ export async function createGithubIssues(
     const onIssueCreated = options.onIssueCreated ?? (() => {});
     const log = options.onLog ?? (() => {});
     const total = options.gaps.length;
+    const owner = options.owner || OWNER;
+    const repo = options.repo || REPO;
 
     progress(0, total, "Connecting to GitHub...");
     log("Creating GitHub issues via gh CLI...");
@@ -52,7 +56,7 @@ export async function createGithubIssues(
         log(`Creating issue ${i + 1}/${total}: ${label}`);
         console.log(`[github-issues] Creating issue ${i + 1}/${total}...`);
 
-        const title = `[Contoso Redesign] ${gap.requirement}`;
+        const title = `${gap.requirement}`;
         const bodyParts = [
             "## Description",
             gap.gap,
@@ -79,7 +83,7 @@ export async function createGithubIssues(
         try {
             // Use gh issue create with --json to get structured output
             const { stdout, stderr } = await execAsync(
-                `gh issue create --title ${shellEscape(title)} --body ${shellEscape(body)} --label enhancement -R ${OWNER}/${REPO}`,
+                `gh issue create --title ${shellEscape(title)} --body ${shellEscape(body)} --label enhancement -R ${owner}/${repo}`,
                 { timeout: 30_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
             );
 

@@ -1,6 +1,6 @@
 import type { CopilotClient, MCPLocalServerConfig, MCPRemoteServerConfig } from "@github/copilot-sdk";
 import { createAgentSession } from "./session-helpers.js";
-import { REPO_PATH } from "../config.js";
+import { REPO_PATH, OWNER, REPO } from "../config.js";
 
 export interface GapItem {
     id: number;
@@ -218,6 +218,9 @@ CRITICAL: Only use WorkIQ/calendar tools. Do NOT use filesystem tools.`,
 interface AnalyzeGapsOptions {
     requirements: Array<{ index: number; text: string }>;
     githubMcp: Record<string, MCPLocalServerConfig | MCPRemoteServerConfig>;
+    owner?: string;
+    repo?: string;
+    repoPath?: string;
     onProgress?: (step: number, message: string) => void;
     onGapStarted?: (id: number) => void;
     onGap?: (gap: GapItem) => void;
@@ -235,9 +238,12 @@ export async function analyzeSelectedGaps(
     const onGapStarted = options.onGapStarted ?? (() => {});
     const onGap = options.onGap ?? (() => {});
     const log = options.onLog ?? (() => {});
+    const owner = options.owner || OWNER;
+    const repo = options.repo || REPO;
+    const rPath = options.repoPath || REPO_PATH;
 
     const concurrent = Math.min(MAX_CONCURRENT, requirements.length);
-    progress(4, "Analyzing danielmeppiel/corporate-website...");
+    progress(4, `Analyzing ${owner}/${repo}...`);
     log(`Starting parallel gap analysis (${concurrent} concurrent sessions)...`);
     console.log(`[gap-analyzer] Starting parallel analysis of ${requirements.length} requirements (concurrency: ${concurrent})...`);
 
@@ -256,9 +262,9 @@ export async function analyzeSelectedGaps(
             const session = await createAgentSession(client, {
                 model: "claude-opus-4.5",
                 mcpServers: options.githubMcp,
-                workingDirectory: REPO_PATH,
+                workingDirectory: rPath,
                 systemMessage: {
-                    content: `You are a senior software architect performing gap analysis on the GitHub repository "danielmeppiel/corporate-website".
+                    content: `You are a senior software architect performing gap analysis on the GitHub repository "${owner}/${repo}".
 
 You have access to GitHub MCP tools — USE THEM to browse the repository structure, read source files, and understand what currently exists.
 
@@ -281,7 +287,7 @@ Return ONLY a valid JSON object (no markdown, no commentary):
             });
 
             const result = await session.sendAndWait({
-                prompt: `Analyze this ONE requirement against the repository "danielmeppiel/corporate-website":
+                prompt: `Analyze this ONE requirement against the repository "${owner}/${repo}":
 
 "${req.text}"
 

@@ -95,6 +95,11 @@ export async function startAnalysis() {
     const meetingName = input ? input.value.trim() : '';
     if (!meetingName) return;
 
+    // Read target repo (optional)
+    const repoInput = document.getElementById('targetRepoInput');
+    const targetRepo = repoInput ? repoInput.value.trim() : '';
+    if (targetRepo) store.set('targetRepo', targetRepo);
+
     const btn = document.getElementById('btnAnalyze');
     btn.disabled = true;
     analysisPhase = 'extracting';
@@ -159,7 +164,8 @@ export async function startAnalysis() {
 
     try {
         const result = await new Promise((resolve, reject) => {
-            const eventSource = new EventSource('/api/analyze?meeting=' + encodeURIComponent(meetingName));
+            const repoParam = store.get('targetRepo') ? '&repo=' + encodeURIComponent(store.get('targetRepo')) : '';
+            const eventSource = new EventSource('/api/analyze?meeting=' + encodeURIComponent(meetingName) + repoParam);
 
             eventSource.addEventListener('progress', (e) => {
                 const { step, message } = JSON.parse(e.data);
@@ -386,15 +392,26 @@ export function updateAnalyzeCount() {
  */
 export function initMeetingFlow() {
     const input = document.getElementById('meetingNameInput');
+    const repoInput = document.getElementById('targetRepoInput');
     const btn = document.getElementById('btnAnalyze');
+
+    function updateBtnState() {
+        if (!btn) return;
+        const hasName = input && input.value.trim();
+        const hasRepo = repoInput && repoInput.value.trim();
+        btn.disabled = !(hasName && hasRepo);
+    }
+
     if (input && btn) {
-        input.addEventListener('input', () => {
-            btn.disabled = !input.value.trim();
-        });
+        input.addEventListener('input', updateBtnState);
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && input.value.trim()) {
-                startAnalysis();
-            }
+            if (e.key === 'Enter' && !btn.disabled) startAnalysis();
+        });
+    }
+    if (repoInput && btn) {
+        repoInput.addEventListener('input', updateBtnState);
+        repoInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !btn.disabled) startAnalysis();
         });
     }
 }

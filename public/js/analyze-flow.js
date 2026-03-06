@@ -74,7 +74,7 @@ export async function startGapAnalysis() {
         const response = await fetch('/api/analyze-gaps', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ selectedIndices }),
+            body: JSON.stringify({ selectedIndices, targetRepo: store.get('targetRepo') || '' }),
         });
 
         if (!response.ok) {
@@ -222,7 +222,7 @@ export async function analyzeSkipped() {
         const response = await fetch('/api/analyze-gaps', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ selectedIndices: skippedIndices }),
+            body: JSON.stringify({ selectedIndices: skippedIndices, targetRepo: store.get('targetRepo') || '' }),
         });
 
         if (!response.ok) {

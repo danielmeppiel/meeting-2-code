@@ -15,8 +15,12 @@ export async function createEpicIssue(
     meetingInfo: MeetingInfo,
     requirements: string[],
     onLog?: (message: string) => void,
+    overrideOwner?: string,
+    overrideRepo?: string,
 ): Promise<EpicIssueResult> {
     const log = onLog ?? (() => {});
+    const owner = overrideOwner || OWNER;
+    const repo = overrideRepo || REPO;
     log("Creating epic issue on GitHub...");
     console.log("[epic-issue] Creating epic issue...");
 
@@ -58,7 +62,7 @@ export async function createEpicIssue(
     // Ensure "epic" label exists (create it if not — ignore errors)
     try {
         await execAsync(
-            `gh label create epic --description "Epic tracking issue" --color 6f42c1 -R ${OWNER}/${REPO}`,
+            `gh label create epic --description "Epic tracking issue" --color 6f42c1 -R ${owner}/${repo}`,
             { timeout: 10_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
         );
     } catch {
@@ -67,7 +71,7 @@ export async function createEpicIssue(
 
     try {
         const { stdout, stderr } = await execAsync(
-            `gh issue create --title ${shellEscape(title)} --body ${shellEscape(body)} --label epic -R ${OWNER}/${REPO}`,
+            `gh issue create --title ${shellEscape(title)} --body ${shellEscape(body)} --label epic -R ${owner}/${repo}`,
             { timeout: 30_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
         );
 
@@ -103,9 +107,13 @@ export async function linkSubIssuesToEpic(
     epicNumber: number,
     subIssueNumbers: number[],
     onLog?: (message: string) => void,
+    overrideOwner?: string,
+    overrideRepo?: string,
 ): Promise<void> {
     if (epicNumber <= 0 || subIssueNumbers.length === 0) return;
     const log = onLog ?? (() => {});
+    const owner = overrideOwner || OWNER;
+    const repo = overrideRepo || REPO;
 
     log(`Linking ${subIssueNumbers.length} issues as sub-issues of #${epicNumber}...`);
     console.log(`[epic-issue] Linking ${subIssueNumbers.length} sub-issues to #${epicNumber}...`);
@@ -116,7 +124,7 @@ export async function linkSubIssuesToEpic(
         try {
             // First, get the issue's database ID (the API needs it, not the issue number)
             const { stdout: idOut } = await execAsync(
-                `gh api repos/${OWNER}/${REPO}/issues/${subNum} --jq '.id'`,
+                `gh api repos/${owner}/${repo}/issues/${subNum} --jq '.id'`,
                 { timeout: 10_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
             );
             const subIssueId = parseInt(idOut.trim(), 10);
@@ -127,7 +135,7 @@ export async function linkSubIssuesToEpic(
 
             // Link as sub-issue via REST API
             await execAsync(
-                `gh api repos/${OWNER}/${REPO}/issues/${epicNumber}/sub_issues --method POST -F sub_issue_id=${subIssueId}`,
+                `gh api repos/${owner}/${repo}/issues/${epicNumber}/sub_issues --method POST -F sub_issue_id=${subIssueId}`,
                 { timeout: 15_000, env: { ...process.env, GITHUB_TOKEN: undefined, GH_PAGER: "cat" } },
             );
             linked++;

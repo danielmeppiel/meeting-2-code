@@ -894,7 +894,7 @@ async function dispatchCloudFromGaps(cloudGaps) {
     const assignResp = await fetch('/api/assign-coding-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ issueNumbers }),
+        body: JSON.stringify({ issueNumbers, targetRepo: store.get('targetRepo') || '' }),
     });
 
     if (!assignResp.ok) {
@@ -969,7 +969,7 @@ async function dispatchLocalFromGaps(localGaps) {
     const response = await fetch('/api/execute-local-agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gapIds }),
+        body: JSON.stringify({ gapIds, targetRepo: store.get('targetRepo') || '' }),
     });
 
     if (!response.ok) {
@@ -1054,7 +1054,7 @@ async function dispatchDeveloperFromGaps(devGaps) {
     const response = await fetch('/api/create-issues', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedIds }),
+        body: JSON.stringify({ selectedIds, targetRepo: store.get('targetRepo') || '' }),
     });
 
     if (!response.ok) {

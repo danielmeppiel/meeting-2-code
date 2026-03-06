@@ -13,6 +13,8 @@ interface AssignResult {
 
 interface AssignCodingAgentOptions {
     issueNumbers: number[];
+    owner?: string;
+    repo?: string;
     onProgress?: (current: number, total: number, message: string) => void;
     onResult?: (result: AssignResult) => void;
     onLog?: (message: string) => void;
@@ -25,6 +27,8 @@ export async function assignCodingAgent(
     const onResult = options.onResult ?? (() => {});
     const log = options.onLog ?? (() => {});
     const total = options.issueNumbers.length;
+    const owner = options.owner || OWNER;
+    const repo = options.repo || REPO;
 
     progress(0, total, "Connecting to GitHub...");
     log("Assigning Copilot coding agent to issues via GitHub REST API...");
@@ -42,7 +46,7 @@ export async function assignCodingAgent(
             const payload = JSON.stringify({
                 assignees: ["copilot-swe-agent[bot]"],
                 agent_assignment: {
-                    target_repo: `${OWNER}/${REPO}`,
+                    target_repo: `${owner}/${repo}`,
                     base_branch: "main",
                     custom_instructions: "",
                     custom_agent: "",
@@ -53,7 +57,7 @@ export async function assignCodingAgent(
             const cmd = `gh api --method POST ` +
                 `-H "Accept: application/vnd.github+json" ` +
                 `-H "X-GitHub-Api-Version: 2022-11-28" ` +
-                `/repos/${OWNER}/${REPO}/issues/${issueNumber}/assignees ` +
+                `/repos/${owner}/${repo}/issues/${issueNumber}/assignees ` +
                 `--input - <<< '${payload}'`;
 
             const { stdout, stderr } = await execAsync(cmd, {

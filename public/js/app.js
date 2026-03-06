@@ -192,8 +192,9 @@ function resetApp() {
     setActivePhase('meeting');
 
     const meetingInput = document.getElementById('meetingNameInput');
+    const repoInput = document.getElementById('targetRepoInput');
     const btnAnalyze = document.getElementById('btnAnalyze');
-    if (btnAnalyze) btnAnalyze.disabled = !(meetingInput && meetingInput.value.trim());
+    if (btnAnalyze) btnAnalyze.disabled = !(meetingInput && meetingInput.value.trim() && repoInput && repoInput.value.trim());
 
     // Reset column visibility
     const colAgentHeader = document.getElementById('colAgentHeader');

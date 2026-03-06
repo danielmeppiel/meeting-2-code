@@ -26,6 +26,10 @@ interface LocalAgentResult {
 interface ExecuteLocalAgentOptions {
     gaps: LocalGapItem[];
     githubMcp: Record<string, MCPLocalServerConfig | MCPRemoteServerConfig>;
+    owner?: string;
+    repo?: string;
+    repoUrl?: string;
+    repoPath?: string;
     onItemStart?: (id: number, requirement: string) => void;
     onItemProgress?: (id: number, message: string) => void;
     onItemComplete?: (id: number, success: boolean, summary: string) => void;
@@ -35,35 +39,35 @@ interface ExecuteLocalAgentOptions {
 // ── Clone helpers ─────────────────────────────────────────────────────────────
 
 /** Ensure the corporate-website repo is cloned locally and up-to-date. */
-async function ensureClone(log: (m: string) => void): Promise<void> {
-    if (!existsSync(join(REPO_PATH, ".git"))) {
-        log(`Cloning ${OWNER}/${REPO} to ${REPO_PATH}...`);
-        await execAsync(`git clone ${REPO_URL} "${REPO_PATH}"`, { timeout: 120_000 });
+async function ensureClone(log: (m: string) => void, owner: string, repo: string, repoUrl: string, repoPath: string): Promise<void> {
+    if (!existsSync(join(repoPath, ".git"))) {
+        log(`Cloning ${owner}/${repo} to ${repoPath}...`);
+        await execAsync(`git clone ${repoUrl} "${repoPath}"`, { timeout: 120_000 });
     }
-    await execAsync("git fetch origin", { cwd: REPO_PATH, timeout: 30_000 });
-    await execAsync("git checkout main --force", { cwd: REPO_PATH, timeout: 10_000 });
-    await execAsync("git reset --hard origin/main", { cwd: REPO_PATH, timeout: 10_000 });
-    await execAsync("git clean -fd", { cwd: REPO_PATH, timeout: 10_000 });
-    log("Local clone of corporate-website is up-to-date on main.");
+    await execAsync("git fetch origin", { cwd: repoPath, timeout: 30_000 });
+    await execAsync("git checkout main --force", { cwd: repoPath, timeout: 10_000 });
+    await execAsync("git reset --hard origin/main", { cwd: repoPath, timeout: 10_000 });
+    await execAsync("git clean -fd", { cwd: repoPath, timeout: 10_000 });
+    log(`Local clone of ${owner}/${repo} is up-to-date on main.`);
 }
 
 /** Create a feature branch in the local clone (force-creates if it already exists). */
-async function createLocalBranch(branchName: string, log: (m: string) => void): Promise<void> {
-    await execAsync(`git checkout -B ${branchName}`, { cwd: REPO_PATH, timeout: 10_000 });
+async function createLocalBranch(branchName: string, log: (m: string) => void, repoPath: string): Promise<void> {
+    await execAsync(`git checkout -B ${branchName}`, { cwd: repoPath, timeout: 10_000 });
     log(`Created local branch: ${branchName}`);
 }
 
 /** Commit all changes and push the branch to origin. */
-async function commitAndPush(branchName: string, message: string, log: (m: string) => void): Promise<void> {
-    await execAsync("git add -A", { cwd: REPO_PATH, timeout: 10_000 });
+async function commitAndPush(branchName: string, message: string, log: (m: string) => void, repoPath: string): Promise<void> {
+    await execAsync("git add -A", { cwd: repoPath, timeout: 10_000 });
     // Check if there are staged changes
-    const { stdout: status } = await execAsync("git status --porcelain", { cwd: REPO_PATH, timeout: 10_000 });
+    const { stdout: status } = await execAsync("git status --porcelain", { cwd: repoPath, timeout: 10_000 });
     if (!status.trim()) {
         log("No changes to commit.");
         return;
     }
     const safeMsg = message.replace(/"/g, '\\"').replace(/\n/g, " ");
-    await execAsync(`git commit -m "${safeMsg}"`, { cwd: REPO_PATH, timeout: 10_000 });
+    await execAsync(`git commit -m "${safeMsg}"`, { cwd: repoPath, timeout: 10_000 });
     log(`Committed changes on branch ${branchName} (local only).`);
 }
 
@@ -155,13 +159,17 @@ export async function executeLocalAgent(
     const onProgress = options.onItemProgress ?? (() => {});
     const onComplete = options.onItemComplete ?? (() => {});
     const log = options.onLog ?? (() => {});
+    const owner = options.owner || OWNER;
+    const repo = options.repo || REPO;
+    const repoUrl = options.repoUrl || REPO_URL;
+    const repoPath = options.repoPath || REPO_PATH;
     const results: LocalAgentResult[] = [];
 
     log(`Starting local agent execution for ${options.gaps.length} gap(s)...`);
 
-    // Ensure corporate-website is cloned and clean before starting
-    onProgress(options.gaps[0]?.id ?? 0, "Preparing local clone of corporate-website...");
-    await ensureClone(log);
+    // Ensure target repo is cloned and clean before starting
+    onProgress(options.gaps[0]?.id ?? 0, `Preparing local clone of ${owner}/${repo}...`);
+    await ensureClone(log, owner, repo, repoUrl, repoPath);
 
     for (let i = 0; i < options.gaps.length; i++) {
         const gap = options.gaps[i]!;
@@ -172,16 +180,16 @@ export async function executeLocalAgent(
 
         try {
             // Reset to main before each gap so branches are independent
-            await execAsync("git checkout main --force", { cwd: REPO_PATH, timeout: 10_000 });
-            await execAsync("git reset --hard origin/main", { cwd: REPO_PATH, timeout: 10_000 });
+            await execAsync("git checkout main --force", { cwd: repoPath, timeout: 10_000 });
+            await execAsync("git reset --hard origin/main", { cwd: repoPath, timeout: 10_000 });
 
             // Create feature branch in the LOCAL clone
             onProgress(gap.id, `Creating branch ${branchName} in local clone...`);
-            await createLocalBranch(branchName, log);
+            await createLocalBranch(branchName, log, repoPath);
 
             // Read the website files from the local clone for context
             onProgress(gap.id, "Reading website files from local clone...");
-            const websiteFiles = readWebsiteFiles(REPO_PATH);
+            const websiteFiles = readWebsiteFiles(repoPath);
             log(`Read ${websiteFiles.length} files from local clone.`);
 
             // Build file context string (limit to ~50KB to fit in context)
@@ -202,17 +210,17 @@ export async function executeLocalAgent(
             const session = await createAgentSession(client, {
                 model: "claude-sonnet-4-20250514",
                 mcpServers: options.githubMcp,
-                workingDirectory: REPO_PATH,
+                workingDirectory: repoPath,
                 systemMessage: {
-                    content: `You are a coding agent that implements features in the ${OWNER}/${REPO} locally cloned repository.
+                    content: `You are a coding agent that implements features in the ${owner}/${repo} locally cloned repository.
 
 CRITICAL RULES:
-- You may use GitHub MCP tools ONLY to READ files from owner="${OWNER}" repo="${REPO}".
+- You may use GitHub MCP tools ONLY to READ files from owner="${owner}" repo="${repo}".
 - Do NOT use MCP tools to create branches, create/update files, or make commits.
   The branch has already been created locally. File writes and commits are handled externally.
-- Do NOT operate on any other repository. The ONLY repo is ${OWNER}/${REPO}.
+- Do NOT operate on any other repository. The ONLY repo is ${owner}/${repo}.
 
-Your job: analyze the requirement, read any additional files you need via MCP (owner="${OWNER}", repo="${REPO}"),
+Your job: analyze the requirement, read any additional files you need via MCP (owner="${owner}", repo="${repo}"),
 then output the COMPLETE updated content of every file that needs to change.
 
 OUTPUT FORMAT — for each file you change, output:
@@ -235,7 +243,7 @@ Only output files that actually need changes.`,
             log("Sending task to Copilot agent...");
 
             const prompt = `
-Implement the following requirement in the ${OWNER}/${REPO} repository.
+Implement the following requirement in the ${owner}/${repo} repository.
 
 **Requirement:** ${gap.requirement}
 
@@ -249,7 +257,7 @@ Here are the current files in the repository for context:
 ${fileContext}
 
 Please analyze the requirement, read any additional files you need using GitHub MCP
-(always use owner="${OWNER}" and repo="${REPO}"), then output the complete updated content
+(always use owner="${owner}" and repo="${repo}"), then output the complete updated content
 of every file that needs to change using the FILE: format described in your instructions.`;
 
             const response = await session.sendAndWait({ prompt }, 300_000);
@@ -263,13 +271,13 @@ of every file that needs to change using the FILE: format described in your inst
             if (changes.length === 0) {
                 // The agent may have used built-in SDK filesystem tools to write
                 // files directly (via workingDirectory). Check git for changes.
-                const { stdout: gitStatus } = await execAsync("git status --porcelain", { cwd: REPO_PATH, timeout: 10_000 });
+                const { stdout: gitStatus } = await execAsync("git status --porcelain", { cwd: repoPath, timeout: 10_000 });
                 if (gitStatus.trim()) {
                     const changedFiles = gitStatus.trim().split("\n").map(l => l.substring(3).trim());
                     log(`Agent used built-in tools to write ${changedFiles.length} file(s): ${changedFiles.join(", ")}`);
                     onProgress(gap.id, "Committing changes made by agent...");
                     const commitMsg = `Implement gap #${gap.id}: ${gap.requirement.substring(0, 60)}`;
-                    await commitAndPush(branchName, commitMsg, log);
+                    await commitAndPush(branchName, commitMsg, log, repoPath);
                     const summary = `Applied ${changedFiles.length} file change(s) to branch ${branchName}: ${changedFiles.join(", ")}`;
                     log(`✔ Gap #${gap.id} completed successfully`);
                     onComplete(gap.id, true, summary);
@@ -288,8 +296,8 @@ of every file that needs to change using the FILE: format described in your inst
             for (const change of changes) {
                 // Normalize the path and prevent traversal outside the repo
                 const normalizedFile = normalize(change.file).replace(/^\/+/, "");
-                const filePath = join(REPO_PATH, normalizedFile);
-                if (!filePath.startsWith(REPO_PATH)) {
+                const filePath = join(repoPath, normalizedFile);
+                if (!filePath.startsWith(repoPath)) {
                     log(`⚠ Skipping file outside repo: ${change.file}`);
                     continue;
                 }
@@ -297,7 +305,7 @@ of every file that needs to change using the FILE: format described in your inst
                 const dir = dirname(filePath);
                 if (!existsSync(dir)) {
                     mkdirSync(dir, { recursive: true });
-                    log(`Created directory: ${relative(REPO_PATH, dir)}`);
+                    log(`Created directory: ${relative(repoPath, dir)}`);
                 }
                 log(`Writing: ${normalizedFile}`);
                 writeFileSync(filePath, change.content + "\n", "utf-8");
@@ -306,7 +314,7 @@ of every file that needs to change using the FILE: format described in your inst
             // Commit and push from the local clone
             onProgress(gap.id, "Committing and pushing changes...");
             const commitMsg = `Implement gap #${gap.id}: ${gap.requirement.substring(0, 60)}`;
-            await commitAndPush(branchName, commitMsg, log);
+            await commitAndPush(branchName, commitMsg, log, repoPath);
 
             const summary = `Applied ${changes.length} file change(s) to branch ${branchName}: ${changes.map(c => c.file).join(", ")}`;
             log(`✔ Gap #${gap.id} completed successfully`);
@@ -319,7 +327,7 @@ of every file that needs to change using the FILE: format described in your inst
             onComplete(gap.id, false, errorMsg.substring(0, 300));
             results.push({ id: gap.id, success: false, summary: errorMsg.substring(0, 300) });
             // Try to get back to main for the next gap
-            try { await execAsync("git checkout main --force", { cwd: REPO_PATH, timeout: 10_000 }); } catch { /* ignore */ }
+            try { await execAsync("git checkout main --force", { cwd: repoPath, timeout: 10_000 }); } catch { /* ignore */ }
         }
     }
 
